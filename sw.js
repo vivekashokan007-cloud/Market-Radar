@@ -1,5 +1,5 @@
-/* Market Radar Service Worker — v1.0.0 */
-const VER   = 'radar-1.0.0';
+/* Market Radar Service Worker — v1.2.0 */
+const VER   = 'radar-1.2.0';
 const SHELL = ['./index.html','./manifest.json'];
 
 self.addEventListener('install', e => {
