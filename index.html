@@ -386,7 +386,7 @@ select.inp{
   .strat-inputs{grid-template-columns:repeat(4,1fr)}
 }
 
-/* ══ v1.2.2 DUAL INDEX ══════════════════════════════════════════════════ */
+/* ══ v1.2.5 DUAL INDEX ══════════════════════════════════════════════════ */
 .idx-section{
   border:1px solid var(--border);border-radius:var(--r);
   overflow:hidden;margin-bottom:16px;
@@ -417,6 +417,83 @@ select.inp{
 }
 .idx-exp-label::after{content:'';flex:1;height:1px;background:var(--border)}
 
+
+/* ══ STRATEGY SCENARIO CARDS (restored v1.2.5) ═════════════════════════ */
+.strat-pair{display:flex;flex-direction:column;gap:8px;padding:12px 14px}
+.strat-half{
+  border-radius:8px;padding:10px 12px;border:1px solid var(--border);
+  position:relative;
+}
+.strat-half.credit{background:var(--gn-bg);border-color:var(--gn-br)}
+.strat-half.debit{ background:var(--bl-bg);border-color:#90B8E0}
+.strat-half.event{ background:#F5EEFF;border-color:#C090E0}
+.strat-half.auto-pick{box-shadow:0 0 0 2px var(--navy)}
+.auto-pick-badge{
+  position:absolute;top:-8px;right:10px;
+  background:var(--navy);color:#FFF;
+  font-size:8px;font-weight:700;letter-spacing:.5px;
+  padding:2px 8px;border-radius:10px;
+}
+.sh-title{font-size:10px;font-weight:700;color:var(--navy);margin-bottom:6px;
+  display:flex;align-items:center;gap:6px}
+.sh-type{font-size:8px;padding:2px 6px;border-radius:10px;font-weight:700}
+.sh-type.cr{background:var(--gn);color:#FFF}
+.sh-type.db{background:var(--bl);color:#FFF}
+.sh-type.ev{background:#8B44D6;color:#FFF}
+.ch-row{display:flex;justify-content:space-between;
+  padding:4px 0;border-bottom:1px solid rgba(0,0,0,.05)}
+.ch-row:last-child{border-bottom:none}
+.chl{font-size:9px;color:var(--muted)}
+.chv{font-size:10px;font-weight:700;color:var(--navy)}
+.chv.gn{color:var(--gn)}.chv.rd{color:var(--rd)}
+.chv.am{color:var(--am)}.chv.bl{color:var(--bl)}
+.mini-rr{width:100%;text-align:center;padding:6px;border-radius:6px;
+  font-size:10px;font-weight:700;margin-top:6px}
+.mini-pass{background:var(--gn-bg);color:var(--gn);border:1px solid var(--gn-br)}
+.mini-warn{background:var(--am-bg);color:var(--am);border:1px solid var(--am-br)}
+.mini-fail{background:var(--rd-bg);color:var(--rd);border:1px solid var(--rd-br)}
+.ss-legs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
+.ss-leg{background:rgba(255,255,255,.6);border-radius:6px;padding:7px;
+  text-align:center;border:1px solid rgba(0,0,0,.08)}
+.ss-leg-t{font-size:8px;color:var(--muted);letter-spacing:1px;
+  text-transform:uppercase;margin-bottom:3px}
+.ss-leg-s{font-family:var(--dp);font-size:16px;color:var(--navy)}
+.ss-leg-d{font-size:9px;color:var(--muted);margin-top:1px}
+
+/* ══ MANUAL ENTRY SECTION ═══════════════════════════════════════════════ */
+.manual-section{
+  background:var(--am-bg);border:1px solid var(--am-br);
+  border-left:4px solid var(--am);border-radius:var(--r);
+  padding:10px 12px;margin-bottom:10px;
+}
+.manual-section h4{font-size:10px;color:var(--am);margin-bottom:8px;
+  letter-spacing:.5px;text-transform:uppercase}
+.manual-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mg-item label{display:block;font-size:8px;color:var(--muted);
+  letter-spacing:.5px;text-transform:uppercase;margin-bottom:2px}
+.mg-item input{
+  width:100%;background:var(--bg2);color:var(--navy);
+  border:1px solid var(--am-br);border-radius:5px;
+  padding:6px;font-size:12px;font-weight:700;
+  font-family:var(--fn);text-align:center;outline:none;
+}
+.mg-item input:focus{box-shadow:0 0 0 2px var(--am-br)}
+
+/* ══ FETCH TIMEOUT BANNER ════════════════════════════════════════════════ */
+.timeout-banner{
+  background:var(--rd-bg);border:1px solid var(--rd-br);
+  border-left:4px solid var(--rd);border-radius:var(--r);
+  padding:10px 12px;margin-bottom:10px;display:none;
+}
+.timeout-banner.show{display:block}
+.timeout-banner strong{color:var(--rd);font-size:11px;display:block;margin-bottom:4px}
+.timeout-banner p{font-size:9px;color:var(--muted);line-height:1.6}
+/* v1.2.5 additions */
+.ts-lbl{font-size:7.5px;color:var(--muted);margin-top:1px;min-height:9px;text-align:right;font-variant-numeric:tabular-nums;}
+.am-bg{background:rgba(235,145,45,0.08);}
+.am-br{border-color:rgba(235,145,45,0.3);}
+.oi-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
+
 </style>
 </head>
 <body>
@@ -435,11 +512,13 @@ select.inp{
 
 <!-- TABS -->
 <nav class="tabs">
-  <div class="tab on" id="t0" onclick="go(0)">🧭 Radar</div>
+  <div class="tab on" id="t0" on  <div class="tab"    id="t0" onclick="go(0)">🧭 Radar</div>
   <div class="tab"    id="t1" onclick="go(1)">📊 Breadth</div>
   <div class="tab"    id="t2" onclick="go(2)">⚡ Verdict</div>
   <div class="tab"    id="t3" onclick="go(3)">📋 Strategy</div>
-  <div class="tab"    id="t4" onclick="go(4)">📖 Guide</div>
+  <div class="tab"    id="t4" onclick="go(4)">💰 Smart$</div>
+  <div class="tab"    id="t5" onclick="go(5)">🌙 Evening</div>
+  <div class="tab"    id="t6" onclick="go(6)">📖 Guide</div>
 </nav>
 
 <div class="wrap">
@@ -447,15 +526,71 @@ select.inp{
 <!-- ═════════════════ PANEL 0: RADAR ═════════════════ -->
 <div class="panel on" id="p0">
 
+  <!-- v1.2.5: Morning time lock banner -->
+  <div id="morning-lock-banner" style="display:none;align-items:center;justify-content:center;
+    background:var(--am-bg);border:1px solid var(--am-br);border-radius:var(--r);
+    margin:14px;padding:14px;text-align:center">
+    <div id="morning-lock-msg" style="font-size:11px;color:var(--am);font-weight:600">
+      🔒 Entry opens at 8:30 AM IST
+    </div>
+  </div>
+
+  <div class="fbar" id="fbar">
+    <div class="finfo">
+      <strong id="fs-title">🌐 Market Radar — Manual Entry</strong>
+      <small id="fs-sub">Enter today's values from NSE / broker / Sensibull</small>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="fbtn" id="btn-save-morning" onclick="saveAll()">💾 SAVE</button>
+      <button class="fbtn" id="btn-edit-morning" onclick="unlockMorning()" style="display:none;background:var(--am);font-size:9px">✏️ Edit</button>
+    </div>
+  </div>ent Crude / Gold → investing.com/commodities<br>
+    USD/INR → rbi.org.in or Google "USD INR"<br>
+    US 10Y Yield → finance.yahoo.com/quote/%5ETNX</p>
+  </div>
+
   <div class="fbar" id="fbar">
     <div class="finfo">
       <strong id="fs-title">🌐 Global Market Data</strong>
-      <small id="fs-sub">Tap FETCH — 9 indicators load from Yahoo Finance</small>
+      <small id="fs-sub">Tap FETCH — tries 5 proxies automatically</small>
     </div>
-    <button class="fbtn" id="btn-fetch" onclick="fetchData()">⚡ FETCH</button>
+    <div style="display:flex;gap:6px">
+      <button class="fbtn" id="btn-fetch" onclick="fetchData()">⚡ FETCH</button>
+      <button class="fbtn" id="btn-manual" onclick="toggleManual()" 
+        style="background:var(--am);font-size:9px">✏️ MANUAL</button>
+    </div>
   </div>
 
   <div id="ctx-wrap"></div>
+
+  <!-- Manual entry section (hidden by default) -->
+  <div class="manual-section" id="manual-section" style="display:none">
+    <h4>✏️ Manual Entry — Global Indicators</h4>
+    <div class="manual-grid">
+      <div class="mg-item"><label>S&P 500</label>
+        <input type="number" id="m_sp500" placeholder="5800" oninput="applyManual('sp500',this.value)"></div>
+      <div class="mg-item"><label>DOW JONES</label>
+        <input type="number" id="m_dow" placeholder="43000" oninput="applyManual('dow',this.value)"></div>
+      <div class="mg-item"><label>US VIX</label>
+        <input type="number" id="m_usvix" placeholder="18" step="0.1" oninput="applyManual('usvix',this.value)"></div>
+      <div class="mg-item"><label>NIKKEI 225</label>
+        <input type="number" id="m_nk" placeholder="38000" oninput="applyManual('nk',this.value)"></div>
+      <div class="mg-item"><label>HANG SENG</label>
+        <input type="number" id="m_hsi" placeholder="19000" oninput="applyManual('hsi',this.value)"></div>
+      <div class="mg-item"><label>BRENT CRUDE</label>
+        <input type="number" id="m_crude" placeholder="75" step="0.1" oninput="applyManual('crude',this.value)"></div>
+      <div class="mg-item"><label>GOLD ($/oz)</label>
+        <input type="number" id="m_gold" placeholder="2650" oninput="applyManual('gold',this.value)"></div>
+      <div class="mg-item"><label>USD / INR</label>
+        <input type="number" id="m_inr" placeholder="84.5" step="0.01" oninput="applyManual('inr',this.value)"></div>
+      <div class="mg-item"><label>US 10Y YIELD %</label>
+        <input type="number" id="m_yld" placeholder="4.5" step="0.01" oninput="applyManual('yld',this.value)"></div>
+    </div>
+    <div style="font-size:8px;color:var(--muted);margin-top:8px;line-height:1.7">
+      Enter today's value. Previous close is estimated as ±0.3% from entered value for signal calculation.<br>
+      <strong style="color:var(--am)">Better:</strong> enter both today's value AND yesterday's close if known.
+    </div>
+  </div>
 
   <div class="sh gn">Auto-Fetched Global <span style="font-size:8px;font-weight:400;color:var(--muted)">(9 indicators)</span></div>
   <div id="auto-rows"></div>
@@ -463,25 +598,30 @@ select.inp{
   <div class="sh am" style="margin-top:16px">Gift Nifty <span style="font-size:8px;font-weight:400;color:var(--muted)">nseifsc.com</span></div>
   <div class="ir">
     <div><div class="iname">GIFT Nifty Level (8:45 AM)</div><div class="isrc">Current level — nseifsc.com</div></div>
-    <input class="inp" type="number" id="gift_now" value="25700" oninput="calc()">
+    <input class="inp" type="number" id="gift_now" value="25700" oninput="calc();stampField('gift_now')">
+  <div id="ts-gift_now" class="ts-lbl" style="text-align:right;padding-right:4px"></div>
   </div>
   <div class="ir">
     <div><div class="iname">Nifty Previous Close</div><div class="isrc">Yesterday's NSE closing price</div></div>
-    <input class="inp" type="number" id="nifty_prev" value="25650" oninput="calc()">
+    <input class="inp" type="number" id="nifty_prev" value="25650" oninput="calc();stampField('nifty_prev')">
+  <div id="ts-nifty_prev" class="ts-lbl" style="text-align:right;padding-right:4px"></div>
   </div>
   <div class="ir">
     <div><div class="iname">GIFT Nifty at 6 AM</div><div class="isrc">Note when you first check morning</div></div>
-    <input class="inp" type="number" id="gift_6am" value="25620" oninput="calc()">
+    <input class="inp" type="number" id="gift_6am" value="25620" oninput="calc();stampField('gift_6am')">
+  <div id="ts-gift_6am" class="ts-lbl" style="text-align:right;padding-right:4px"></div>
   </div>
 
   <div class="sh am" style="margin-top:16px">India Specific <span style="font-size:8px;font-weight:400;color:var(--muted)">NSE manual entry</span></div>
   <div class="ir">
     <div><div class="iname">India VIX</div><div class="isrc">nseindia.com → search "India VIX"</div></div>
-    <input class="inp" type="number" id="india_vix" value="14" step="0.1" oninput="calc()">
+    <input class="inp" type="number" id="india_vix" value="14" step="0.1" oninput="calc();stampField('india_vix')">
+  <div id="ts-india_vix" class="ts-lbl" style="text-align:right;padding-right:4px"></div>
   </div>
   <div class="ir">
     <div><div class="iname">FII Net Flow (₹ Cr)</div><div class="isrc">NSE → Market Data → FII/DII · +buy / −sell</div></div>
-    <input class="inp" type="number" id="fii" value="500" oninput="calc()">
+    <input class="inp" type="number" id="fii" value="500" oninput="calc();stampField('fii')">
+  <div id="ts-fii" class="ts-lbl" style="text-align:right;padding-right:4px"></div>
   </div>
   <div class="ir adv">
     <div><div class="iname">DII Net Flow (₹ Cr) <span style="font-size:9px;color:var(--muted)">advisory</span></div><div class="isrc">Same NSE page — context only</div></div>
@@ -489,11 +629,13 @@ select.inp{
   </div>
   <div class="ir">
     <div><div class="iname">Put-Call Ratio (PCR)</div><div class="isrc">NSE Option Chain → top of page</div></div>
-    <input class="inp" type="number" id="pcr" value="1.1" step="0.01" oninput="calc()">
+    <input class="inp" type="number" id="pcr" value="1.1" step="0.01" oninput="calc();stampField('pcr')">
+  <div id="ts-pcr" class="ts-lbl" style="text-align:right;padding-right:4px"></div>
   </div>
   <div class="ir">
     <div><div class="iname">Max Pain Level</div><div class="isrc">sensibull.com → Option Chain → Max Pain</div></div>
-    <input class="inp" type="number" id="max_pain" value="25450" oninput="calc()">
+    <input class="inp" type="number" id="max_pain" value="25450" oninput="calc();stampField('max_pain')">
+  <div id="ts-max_pain" class="ts-lbl" style="text-align:right;padding-right:4px"></div>
   </div>
   <div class="ir">
     <div><div class="iname">Prev Day Close Character</div><div class="isrc">Where Nifty closed in day's range</div></div>
@@ -520,18 +662,21 @@ select.inp{
   <div class="sh bl">Nifty 50 Breadth</div>
   <div class="ir">
     <div><div class="iname">Nifty 50 Advances (0–50)</div><div class="isrc">NSE Market Stats → Advances/Declines</div></div>
-    <input class="inp" type="number" id="n50adv" value="32" min="0" max="50" oninput="calc()">
+    <input class="inp" type="number" id="n50adv" value="32" min="0" max="50" oninput="calc();stampField('n50adv')">
+  <div id="ts-n50adv" class="ts-lbl" style="text-align:right;padding-right:4px"></div>
   </div>
   <div class="arow"><div><div class="al">AUTO-CALC</div><div class="an">Nifty 50 Declines</div></div><div class="av" id="n50dec" style="color:var(--rd)">18</div><div class="tag fl" id="n50sig">MIXED</div></div>
   <div class="ir">
     <div><div class="iname">% Stocks above 200-DMA</div><div class="isrc">Screener.in — weekly check</div></div>
-    <input class="inp" type="number" id="n50dma" value="62" min="0" max="100" oninput="calc()">
+    <input class="inp" type="number" id="n50dma" value="62" min="0" max="100" oninput="calc();stampField('n50dma')">
+  <div id="ts-n50dma" class="ts-lbl" style="text-align:right;padding-right:4px"></div>
   </div>
 
   <div class="sh gn" style="margin-top:14px">Bank Nifty Breadth</div>
   <div class="ir">
-    <div><div class="iname">BNF Advances (0–12)</div><div class="isrc">NSE Market Stats → Advances/Declines</div></div>
-    <input class="inp" type="number" id="bnfadv" value="8" min="0" max="12" oninput="calc()">
+    <div><div class="iname">BNF Advances (0–14)</div><div class="isrc">NSE Market Stats → Advances/Declines</div></div>
+    <input class="inp" type="number" id="bnfadv" value="7" min="0" max="14" oninput="calc();stampField('bnfadv')">
+  <div id="ts-bnfadv" class="ts-lbl" style="text-align:right;padding-right:4px"></div>
   </div>
   <div class="arow" style="border-left-color:var(--gn-br)"><div><div class="al">AUTO-CALC</div><div class="an">BNF Declines</div></div><div class="av" id="bnfdec" style="color:var(--rd)">4</div><div class="tag fl" id="bnfsig">BROAD</div></div>
 
@@ -577,6 +722,55 @@ select.inp{
       <div class="vsig"><div class="vsign" id="v-neut" style="color:var(--muted)">0</div><div class="vsigl">Neutral</div></div>
       <div class="vsig"><div class="vsign" id="v-bear" style="color:var(--rd)">0</div><div class="vsigl">Bearish</div></div>
     </div>
+  </div>
+
+  <!-- v1.2.5: Score Delta Row -->
+  <div id="score-delta-row" style="display:none;align-items:center;justify-content:space-between;
+    background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+    padding:8px 14px;margin-bottom:8px;font-size:9px">
+    <div>
+      <div style="color:var(--muted);margin-bottom:2px">YESTERDAY</div>
+      <div id="delta-prev" style="font-weight:600;color:var(--navy)">—</div>
+    </div>
+    <div style="text-align:right">
+      <div style="color:var(--muted);margin-bottom:2px">CHANGE</div>
+      <div id="delta-val" style="font-weight:700">—</div>
+    </div>
+  </div>
+
+  <!-- v1.2.5: BNF Morning Checklist -->
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:8px">
+    <div style="font-size:8px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:8px">BANK NIFTY HEALTH CHECK</div>
+    <div style="margin-bottom:6px">
+      <div style="font-size:9px;color:var(--navy);font-weight:600;margin-bottom:3px">RBI Stance</div>
+      <div style="display:flex;gap:10px">
+        <label style="font-size:9px;display:flex;align-items:center;gap:3px"><input type="radio" name="rbi-stance" value="hawkish" onchange="saveBNFSector()"> Hawkish</label>
+        <label style="font-size:9px;display:flex;align-items:center;gap:3px"><input type="radio" name="rbi-stance" value="neutral" checked onchange="saveBNFSector()"> Neutral</label>
+        <label style="font-size:9px;display:flex;align-items:center;gap:3px"><input type="radio" name="rbi-stance" value="dovish" onchange="saveBNFSector()"> Dovish</label>
+      </div>
+    </div>
+    <div style="margin-bottom:6px">
+      <div style="font-size:9px;color:var(--navy);font-weight:600;margin-bottom:3px">Banking Liquidity</div>
+      <div style="display:flex;gap:10px">
+        <label style="font-size:9px;display:flex;align-items:center;gap:3px"><input type="radio" name="bnf-liq" value="deficit" onchange="saveBNFSector()"> Deficit</label>
+        <label style="font-size:9px;display:flex;align-items:center;gap:3px"><input type="radio" name="bnf-liq" value="neutral" checked onchange="saveBNFSector()"> Neutral</label>
+        <label style="font-size:9px;display:flex;align-items:center;gap:3px"><input type="radio" name="bnf-liq" value="surplus" onchange="saveBNFSector()"> Surplus</label>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:9px;color:var(--navy);font-weight:600;margin-bottom:3px">Heavyweight News Today</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label style="font-size:9px;display:flex;align-items:center;gap:3px"><input type="radio" name="bnf-news" value="none" checked onchange="saveBNFSector()"> None</label>
+        <label style="font-size:9px;display:flex;align-items:center;gap:3px"><input type="radio" name="bnf-news" value="hdfc" onchange="saveBNFSector()"> HDFC Bank</label>
+        <label style="font-size:9px;display:flex;align-items:center;gap:3px"><input type="radio" name="bnf-news" value="icici" onchange="saveBNFSector()"> ICICI</label>
+        <label style="font-size:9px;display:flex;align-items:center;gap:3px"><input type="radio" name="bnf-news" value="both" onchange="saveBNFSector()"> Both</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- v1.2.5: Index Recommendation Card -->
+  <div id="index-rec-card" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:8px">
+    <div style="font-size:9px;color:var(--muted)">Enter data in Radar tab to see recommendation</div>
   </div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
@@ -674,7 +868,7 @@ select.inp{
     <div class="idx-section-hdr">
       <div>
         <div class="idx-label" style="color:var(--bl)">Nifty 50</div>
-        <div class="idx-meta">Weekly expiry: Monday · Lot size 75</div>
+        <div class="idx-meta">Weekly expiry: Tuesday · Monthly last Monday · Lot 75</div>
       </div>
       <div style="font-size:9px;color:var(--muted);text-align:right">
         Expiry: <strong id="nf-next-exp" style="color:var(--navy)">—</strong>
@@ -698,7 +892,20 @@ select.inp{
           <label>No. of Lots</label>
           <input class="idx-inp" type="number" id="nf_lots" value="1" oninput="buildMatrix()">
         </div>
+        <div class="idx-inp-grp" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:8px;margin-top:4px">
+          <label style="color:var(--tl);font-weight:700">Max Call OI Strike</label>
+          <input class="idx-inp" type="number" id="nf-oi-call-sell" placeholder="25700" oninput="renderOIStrikePanel('NF');stampField('nf-oi-call-sell')">
+        </div>
+        <div class="idx-inp-grp">
+          <label style="color:var(--tl)">OI Buy Strike</label>
+          <input class="idx-inp" type="number" id="nf-oi-call-buy" placeholder="25900" oninput="renderOIStrikePanel('NF');stampField('nf-oi-call-buy')">
+        </div>
+        <div class="idx-inp-grp">
+          <label>DTE for OI calc</label>
+          <input class="idx-inp" type="number" id="nf-oi-dte" placeholder="6" value="6" oninput="renderOIStrikePanel('NF')">
+        </div>
       </div>
+      <div id="nf-oi-result" style="margin:0 14px 8px;font-size:10px"></div>
       <div class="idx-exp-label">Expiry Scenarios</div>
       <div id="nf-exp-cards"></div>
     </div>
@@ -733,7 +940,20 @@ select.inp{
           <label>No. of Lots</label>
           <input class="idx-inp" type="number" id="bn_lots" value="1" oninput="buildMatrix()">
         </div>
+        <div class="idx-inp-grp" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:8px;margin-top:4px">
+          <label style="color:var(--tl);font-weight:700">Max Call OI Strike</label>
+          <input class="idx-inp" type="number" id="bn-oi-call-sell" placeholder="62000" oninput="renderOIStrikePanel('BN');stampField('bn-oi-call-sell')">
+        </div>
+        <div class="idx-inp-grp">
+          <label style="color:var(--tl)">OI Buy Strike</label>
+          <input class="idx-inp" type="number" id="bn-oi-call-buy" placeholder="62400" oninput="renderOIStrikePanel('BN');stampField('bn-oi-call-buy')">
+        </div>
+        <div class="idx-inp-grp">
+          <label>DTE for OI calc</label>
+          <input class="idx-inp" type="number" id="bn-oi-dte" placeholder="33" value="33" oninput="renderOIStrikePanel('BN')">
+        </div>
       </div>
+      <div id="bn-oi-result" style="margin:0 14px 8px;font-size:10px"></div>
       <div class="idx-exp-label">Expiry Scenarios</div>
       <div id="bn-exp-cards"></div>
     </div>
@@ -753,8 +973,270 @@ select.inp{
   </div>
 </div>
 
-<!-- ═════════════════ PANEL 4: GUIDE ═════════════════ -->
+<!-- ═════════════════ PANEL 4: SMART MONEY ═════════════════ -->
 <div class="panel" id="p4">
+  <div class="sh tl">Smart Money <span style="font-size:8px;font-weight:400;color:var(--muted)">FII positioning + OI map</span></div>
+
+  <div class="info" style="border-left:3px solid var(--tl);margin-bottom:12px">
+    <div style="font-size:9px;color:var(--muted);line-height:1.7">
+      Source: NSE → F&O → Participant-wise Open Interest (published by 6 PM daily)<br>
+      Sensibull → Option Chain → OI view for strike-level data
+    </div>
+  </div>
+
+  <!-- FII Positioning -->
+  <div class="sh am">FII Index Futures</div>
+  <div class="ir">
+    <div><div class="iname">FII Long Contracts</div><div class="isrc">NSE F&O participant OI</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <input class="inp" type="number" id="sm_fii_long" placeholder="85000" oninput="renderSMVerdict();stampField('sm_fii_long')">
+      <div id="ts-sm_fii_long" class="ts-lbl"></div>
+    </div>
+  </div>
+  <div class="ir">
+    <div><div class="iname">FII Short Contracts</div><div class="isrc">NSE F&O participant OI</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <input class="inp" type="number" id="sm_fii_short" placeholder="62000" oninput="renderSMVerdict();stampField('sm_fii_short')">
+      <div id="ts-sm_fii_short" class="ts-lbl"></div>
+    </div>
+  </div>
+
+  <div class="sh am" style="margin-top:14px">FII Index Options</div>
+  <div class="ir">
+    <div><div class="iname">Call OI (FII Long)</div><div class="isrc">NSE F&O participant OI</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <input class="inp" type="number" id="sm_fii_call" placeholder="124500" oninput="renderSMVerdict();stampField('sm_fii_call')">
+      <div id="ts-sm_fii_call" class="ts-lbl"></div>
+    </div>
+  </div>
+  <div class="ir">
+    <div><div class="iname">Put OI (FII Long)</div><div class="isrc">NSE F&O participant OI</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <input class="inp" type="number" id="sm_fii_put" placeholder="98200" oninput="renderSMVerdict();stampField('sm_fii_put')">
+      <div id="ts-sm_fii_put" class="ts-lbl"></div>
+    </div>
+  </div>
+
+  <div class="sh am" style="margin-top:14px">Prop Desk Futures</div>
+  <div class="ir">
+    <div><div class="iname">Prop Long Contracts</div><div class="isrc">NSE F&O participant OI</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <input class="inp" type="number" id="sm_prop_long" placeholder="45000" oninput="renderSMVerdict();stampField('sm_prop_long')">
+      <div id="ts-sm_prop_long" class="ts-lbl"></div>
+    </div>
+  </div>
+  <div class="ir">
+    <div><div class="iname">Prop Short Contracts</div><div class="isrc">NSE F&O participant OI</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <input class="inp" type="number" id="sm_prop_short" placeholder="71000" oninput="renderSMVerdict();stampField('sm_prop_short')">
+      <div id="ts-sm_prop_short" class="ts-lbl"></div>
+    </div>
+  </div>
+
+  <!-- OI Map -->
+  <div class="sh gn" style="margin-top:14px">Option Chain OI Map</div>
+  <div style="display:flex;gap:8px;margin:8px 14px 0">
+    <label style="font-size:10px;display:flex;align-items:center;gap:4px">
+      <input type="radio" name="sm-idx" value="NF" onchange="renderSMVerdict()"> Nifty 50
+    </label>
+    <label style="font-size:10px;display:flex;align-items:center;gap:4px">
+      <input type="radio" name="sm-idx" value="BN" checked onchange="renderSMVerdict()"> Bank Nifty
+    </label>
+  </div>
+  <div class="ir">
+    <div><div class="iname">Max Call OI Strike (Resistance)</div><div class="isrc">Sensibull → OI view</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <input class="inp" type="number" id="sm_call_wall" placeholder="62000" oninput="renderSMVerdict();stampField('sm_call_wall')">
+      <div id="ts-sm_call_wall" class="ts-lbl"></div>
+    </div>
+  </div>
+  <div class="ir">
+    <div><div class="iname">Max Put OI Strike (Support)</div><div class="isrc">Sensibull → OI view</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <input class="inp" type="number" id="sm_put_wall" placeholder="60000" oninput="renderSMVerdict();stampField('sm_put_wall')">
+      <div id="ts-sm_put_wall" class="ts-lbl"></div>
+    </div>
+  </div>
+  <div class="ir">
+    <div><div class="iname">PCR (today)</div><div class="isrc">NSE option chain top</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <input class="inp" type="number" id="sm_pcr_today" placeholder="1.24" step="0.01" oninput="renderSMVerdict();stampField('sm_pcr_today')">
+      <div id="ts-sm_pcr_today" class="ts-lbl"></div>
+    </div>
+  </div>
+  <div class="ir">
+    <div><div class="iname">PCR (yesterday)</div><div class="isrc">From evening session or memory</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <input class="inp" type="number" id="sm_pcr_prev" placeholder="1.42" step="0.01" oninput="renderSMVerdict();stampField('sm_pcr_prev')">
+      <div id="ts-sm_pcr_prev" class="ts-lbl"></div>
+    </div>
+  </div>
+
+  <!-- Smart Money Verdict -->
+  <div id="sm-verdict" style="margin:14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;font-size:10px;line-height:1.8">
+    <div style="font-size:9px;color:var(--muted)">Enter data above to see Smart Money verdict</div>
+  </div>
+
+  <div style="display:flex;justify-content:center;margin:8px 14px 16px">
+    <button class="fbtn" id="btn-save-smartmoney" onclick="saveSMData()" style="font-size:10px">💾 Save Smart Money Data</button>
+  </div>
+</div>
+
+<!-- ═════════════════ PANEL 5: EVENING CLOSE ═════════════════ -->
+<div class="panel" id="p5">
+
+  <!-- Time lock banner -->
+  <div id="evening-lock-banner" style="display:none;align-items:center;justify-content:center;
+    background:var(--am-bg);border:1px solid var(--am-br);border-radius:var(--r);
+    margin:14px;padding:18px;text-align:center">
+    <div>
+      <div style="font-size:20px;margin-bottom:8px">🔒</div>
+      <div id="evening-lock-msg" style="font-size:11px;color:var(--am);font-weight:600">
+        Evening session opens at 3:45 PM IST
+      </div>
+      <div style="font-size:9px;color:var(--muted);margin-top:4px">
+        Wait for final closing prices before entering data
+      </div>
+    </div>
+  </div>
+
+  <div id="evening-content" style="display:none">
+    <div class="sh tl">Evening Close <span style="font-size:8px;font-weight:400;color:var(--muted)">today's closing values → tomorrow's delta baseline</span></div>
+
+    <div class="info" style="border-left:3px solid var(--tl);margin-bottom:4px">
+      <div style="font-size:9px;color:var(--muted);line-height:1.7">
+        Enter today's closing values after 3:45 PM. These become tomorrow morning's comparison baseline for delta scoring.
+      </div>
+    </div>
+
+    <!-- Global Closing Values -->
+    <div class="sh gn">Global Markets (closing)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px">
+      <div class="ir" style="flex-direction:column;align-items:flex-start">
+        <div class="iname" style="font-size:9px">S&P 500</div>
+        <input class="inp" style="width:100%;box-sizing:border-box" type="number" id="ev_sp500" placeholder="5993" oninput="stampField('ev_sp500')">
+        <div id="ts-ev_sp500" class="ts-lbl"></div>
+      </div>
+      <div class="ir" style="flex-direction:column;align-items:flex-start">
+        <div class="iname" style="font-size:9px">DOW JONES</div>
+        <input class="inp" style="width:100%;box-sizing:border-box" type="number" id="ev_dow" placeholder="43428" oninput="stampField('ev_dow')">
+        <div id="ts-ev_dow" class="ts-lbl"></div>
+      </div>
+      <div class="ir" style="flex-direction:column;align-items:flex-start">
+        <div class="iname" style="font-size:9px">US VIX</div>
+        <input class="inp" style="width:100%;box-sizing:border-box" type="number" id="ev_usvix" placeholder="14.42" step="0.1" oninput="stampField('ev_usvix')">
+        <div id="ts-ev_usvix" class="ts-lbl"></div>
+      </div>
+      <div class="ir" style="flex-direction:column;align-items:flex-start">
+        <div class="iname" style="font-size:9px">NIKKEI</div>
+        <input class="inp" style="width:100%;box-sizing:border-box" type="number" id="ev_nk" placeholder="38422" oninput="stampField('ev_nk')">
+        <div id="ts-ev_nk" class="ts-lbl"></div>
+      </div>
+      <div class="ir" style="flex-direction:column;align-items:flex-start">
+        <div class="iname" style="font-size:9px">HANG SENG</div>
+        <input class="inp" style="width:100%;box-sizing:border-box" type="number" id="ev_hsi" placeholder="19820" oninput="stampField('ev_hsi')">
+        <div id="ts-ev_hsi" class="ts-lbl"></div>
+      </div>
+      <div class="ir" style="flex-direction:column;align-items:flex-start">
+        <div class="iname" style="font-size:9px">BRENT CRUDE</div>
+        <input class="inp" style="width:100%;box-sizing:border-box" type="number" id="ev_crude" placeholder="74.85" step="0.1" oninput="stampField('ev_crude')">
+        <div id="ts-ev_crude" class="ts-lbl"></div>
+      </div>
+      <div class="ir" style="flex-direction:column;align-items:flex-start">
+        <div class="iname" style="font-size:9px">GOLD ($/oz)</div>
+        <input class="inp" style="width:100%;box-sizing:border-box" type="number" id="ev_gold" placeholder="2918" oninput="stampField('ev_gold')">
+        <div id="ts-ev_gold" class="ts-lbl"></div>
+      </div>
+      <div class="ir" style="flex-direction:column;align-items:flex-start">
+        <div class="iname" style="font-size:9px">USD/INR</div>
+        <input class="inp" style="width:100%;box-sizing:border-box" type="number" id="ev_inr" placeholder="84.38" step="0.01" oninput="stampField('ev_inr')">
+        <div id="ts-ev_inr" class="ts-lbl"></div>
+      </div>
+      <div class="ir" style="flex-direction:column;align-items:flex-start;grid-column:1/-1">
+        <div class="iname" style="font-size:9px">US 10Y YIELD %</div>
+        <input class="inp" style="width:100%;box-sizing:border-box" type="number" id="ev_yld" placeholder="4.51" step="0.01" oninput="stampField('ev_yld')">
+        <div id="ts-ev_yld" class="ts-lbl"></div>
+      </div>
+    </div>
+
+    <!-- India Specific -->
+    <div class="sh am" style="margin-top:12px">India Specific (NSE closing)</div>
+    <div class="ir">
+      <div><div class="iname">India VIX close</div><div class="isrc">nseindia.com</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <input class="inp" type="number" id="ev_indiavix" placeholder="14.15" step="0.1" oninput="stampField('ev_indiavix')">
+        <div id="ts-ev_indiavix" class="ts-lbl"></div>
+      </div>
+    </div>
+    <div class="ir">
+      <div><div class="iname">FII Net Flow (₹ Cr)</div><div class="isrc">NSE Market Data → published by 6 PM</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <input class="inp" type="number" id="ev_fii" placeholder="+340" oninput="stampField('ev_fii')">
+        <div id="ts-ev_fii" class="ts-lbl"></div>
+      </div>
+    </div>
+    <div class="ir">
+      <div><div class="iname">PCR close</div><div class="isrc">NSE option chain</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <input class="inp" type="number" id="ev_pcr" placeholder="1.42" step="0.01" oninput="stampField('ev_pcr')">
+        <div id="ts-ev_pcr" class="ts-lbl"></div>
+      </div>
+    </div>
+    <div class="ir">
+      <div><div class="iname">Nifty 50 close</div><div class="isrc">NSE or broker</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <input class="inp" type="number" id="ev_nifty" placeholder="25512" oninput="stampField('ev_nifty')">
+        <div id="ts-ev_nifty" class="ts-lbl"></div>
+      </div>
+    </div>
+    <div class="ir">
+      <div><div class="iname">Bank Nifty close</div><div class="isrc">NSE or broker</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <input class="inp" type="number" id="ev_bnf" placeholder="61175" oninput="stampField('ev_bnf')">
+        <div id="ts-ev_bnf" class="ts-lbl"></div>
+      </div>
+    </div>
+    <div class="ir">
+      <div><div class="iname">Nifty A/D (advances)</div><div class="isrc">NSE Market Stats</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <input class="inp" type="number" id="ev_n50adv" placeholder="32" oninput="stampField('ev_n50adv')">
+        <div id="ts-ev_n50adv" class="ts-lbl"></div>
+      </div>
+    </div>
+    <div class="ir">
+      <div><div class="iname">BNF A/D (advances of 14)</div><div class="isrc">NSE Market Stats</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <input class="inp" type="number" id="ev_bnfadv" placeholder="10" oninput="stampField('ev_bnfadv')">
+        <div id="ts-ev_bnfadv" class="ts-lbl"></div>
+      </div>
+    </div>
+    <div class="ir">
+      <div><div class="iname">Max Pain — Nifty</div><div class="isrc">Sensibull closing</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <input class="inp" type="number" id="ev_maxpain_nf" placeholder="25400" oninput="stampField('ev_maxpain_nf')">
+        <div id="ts-ev_maxpain_nf" class="ts-lbl"></div>
+      </div>
+    </div>
+    <div class="ir">
+      <div><div class="iname">Max Pain — BNF</div><div class="isrc">Sensibull closing</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <input class="inp" type="number" id="ev_maxpain_bn" placeholder="61000" oninput="stampField('ev_maxpain_bn')">
+        <div id="ts-ev_maxpain_bn" class="ts-lbl"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:center;margin:14px">
+      <button class="fbtn" id="btn-save-evening" onclick="lockEvening()" style="background:var(--tl)">💾 Save Evening Data</button>
+      <button class="fbtn" id="btn-edit-evening" onclick="unlockEvening()" style="display:none;background:var(--am);font-size:9px">✏️ Edit</button>
+    </div>
+    <div style="text-align:center;font-size:9px;color:var(--muted);padding-bottom:20px">
+      Saved data becomes tomorrow's delta baseline automatically
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════════ PANEL 6: GUIDE (was p4) ═════════════════ -->
+<div class="panel" id="p6">
 
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;display:flex;justify-content:space-between;margin-bottom:10px;font-size:9px">
     <span style="color:var(--muted)">Version: <strong style="color:var(--am)">v1.1.0</strong></span>
@@ -800,7 +1282,20 @@ select.inp{
 
   <div class="sh" style="margin-top:14px">Patch Notes</div>
   <div class="pitem">
-    <div class="pver">v1.2.2 <span class="pdate">Feb 2026</span></div>
+    <div class="pver">v1.2.5 <span class="pdate">Feb 2026</span></div>
+    <ul>
+      <li>Manual entry button on Radar tab — enter any global indicator by hand when fetch fails</li>
+      <li>Fetch timeout — banner appears after 15s prompting manual entry with source links</li>
+      <li>Restored missing scenario card CSS (strat-pair, strat-half, ch-row, ss-legs, etc.)</li>
+      <li>Fixed BNF expiry returning empty — date comparison bug resolved</li>
+      <li>Fixed NF weekly expiry label — Tuesday (was incorrectly Monday)</li>
+    </ul>
+    <ul>
+      <li>Fetch engine upgraded — now tries 5 CORS proxies (was 2)</li>
+      <li>Tries 2 Yahoo Finance endpoints per proxy — 10 combinations total</li>
+      <li>Better error message with manual data source links on failure</li>
+      <li>Proxy list: corsproxy.io, allorigins.win, codetabs.com, thingproxy, cors.eu.org</li>
+    </ul>
     <ul>
       <li>Nifty 50 and Bank Nifty now fully independent sections on Strategy tab</li>
       <li>Each index has its own Spot Price, ATR, Lot Size, No. of Lots — saved separately</li>
@@ -821,7 +1316,7 @@ select.inp{
     </ul>
   </div>
   <div class="pitem">
-    <div class="pver">v1.2.0 <span class="pdate">Feb 2026</span></div>
+    <div class="pver">v1.2.5 <span class="pdate">Feb 2026</span></div>
     <ul>
       <li>AUTO mode — VIX + direction decides credit vs debit automatically</li>
       <li>Credit strategies: Bull Put Spread, Bear Call Spread, Iron Condor</li>
@@ -879,8 +1374,10 @@ document.getElementById('app-url').textContent = location.href.split('?')[0];
 function go(n){
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('on',i===n));
   document.querySelectorAll('.panel').forEach((p,i)=>p.classList.toggle('on',i===n));
-  if(n===2) calc();
+  if(n===2){ calc(); renderScoreDelta(); renderIndexRec(); }
   if(n===3) buildMatrix();
+  if(n===4) renderSMVerdict();
+  if(n===5) checkTimeLock();
 }
 
 // ── Toast ──────────────────────────────────────
@@ -920,15 +1417,15 @@ function renderCtx(){
 
 // ── Indicator definitions ──────────────────────
 const INDS=[
-  {id:'sp500', sym:'^GSPC',    name:'S&P 500',       wt:0.17,inv:false,sp:null},
-  {id:'dow',   sym:'^DJI',     name:'DOW JONES',      wt:0.06,inv:false,sp:null},
-  {id:'usvix', sym:'^VIX',     name:'US VIX (CBOE)',  wt:0.05,inv:false,sp:'vix'},
-  {id:'nk',    sym:'^N225',    name:'NIKKEI 225',     wt:0.06,inv:false,sp:null},
-  {id:'hsi',   sym:'^HSI',     name:'HANG SENG',      wt:0.03,inv:false,sp:null},
-  {id:'crude', sym:'BZ=F',     name:'BRENT CRUDE',    wt:0.07,inv:true, sp:null},
-  {id:'gold',  sym:'GC=F',     name:'GOLD',           wt:0.03,inv:true, sp:null},
-  {id:'inr',   sym:'USDINR=X', name:'USD / INR',      wt:0.03,inv:false,sp:'inr'},
-  {id:'yld',   sym:'^TNX',     name:'US 10Y YIELD',   wt:0.04,inv:false,sp:'yield'},
+  {id:'sp500', sym:'^GSPC',    name:'S&P 500',       wt:0.1619,inv:false,sp:null},
+  {id:'dow',   sym:'^DJI',     name:'DOW JONES',      wt:0.0571,inv:false,sp:null},
+  {id:'usvix', sym:'^VIX',     name:'US VIX (CBOE)',  wt:0.0476,inv:false,sp:'vix'},
+  {id:'nk',    sym:'^N225',    name:'NIKKEI 225',     wt:0.0571,inv:false,sp:null},
+  {id:'hsi',   sym:'^HSI',     name:'HANG SENG',      wt:0.0286,inv:false,sp:null},
+  {id:'crude', sym:'BZ=F',     name:'BRENT CRUDE',    wt:0.0667,inv:true, sp:null},
+  {id:'gold',  sym:'GC=F',     name:'GOLD',           wt:0.0286,inv:true, sp:null},
+  {id:'inr',   sym:'USDINR=X', name:'USD / INR',      wt:0.0286,inv:false,sp:'inr'},
+  {id:'yld',   sym:'^TNX',     name:'US 10Y YIELD',   wt:0.0381,inv:false,sp:'yield'},
 ];
 const GD={};
 
@@ -959,10 +1456,117 @@ function renderAutoRows(){
 }
 
 // ── Fetch ──────────────────────────────────────
-const PROXIES=[u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`];
+/* ═══════════════════════════════════════════════
+   ROBUST FETCH ENGINE — 5 proxies, 2 endpoints
+   Tries every combination until one works
+   ═══════════════════════════════════════════════ */
+const PROXIES = [
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
+  u => `https://cors.eu.org/${u}`,
+];
+
+// Two Yahoo Finance endpoints — v7 and v8
+function yahooUrls(syms){
+  const s = syms.join(',');
+  return [
+    `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${s}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketChangePercent`,
+    `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${s}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketChangePercent`,
+    `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${s}&range=1d&interval=1d`,
+  ];
+}
+
 async function tryFetch(url){
-  for(const px of PROXIES){try{const r=await fetch(px(url),{signal:AbortSignal.timeout(9000)});if(r.ok)return await r.json()}catch{}}
-  throw new Error('failed');
+  for(const px of PROXIES){
+    try{
+      const r = await fetch(px(url), {
+        signal: AbortSignal.timeout(8000),
+        headers: {'Accept':'application/json'}
+      });
+      if(r.ok){
+        const data = await r.json();
+        // Validate it's actually market data not an error page
+        if(data && (data.quoteResponse || data.spark || data.chart)) return data;
+      }
+    }catch{}
+  }
+  throw new Error('all proxies failed');
+}
+
+/* ─── Manual Entry ─────────────────────────────────────────────────────
+   When fetch fails or user prefers manual, they can type values directly.
+   applyManual() converts a single current value into GD format
+   by estimating prev close as 0.3% in opposite direction.
+   ─────────────────────────────────────────────────────────────────────── */
+function toggleManual(){
+  const sec = document.getElementById('manual-section');
+  const isOn = sec.style.display !== 'none';
+  sec.style.display = isOn ? 'none' : 'block';
+  document.getElementById('btn-manual').textContent = isOn ? '✏️ MANUAL' : '✕ CLOSE';
+  if(!isOn){
+    // Pre-fill with existing GD values if available
+    const map = {sp500:'m_sp500',dow:'m_dow',usvix:'m_usvix',nk:'m_nk',
+                 hsi:'m_hsi',crude:'m_crude',gold:'m_gold',inr:'m_inr',yld:'m_yld'};
+    Object.entries(map).forEach(([id,elId])=>{
+      if(GD[id]){
+        const el=document.getElementById(elId);
+        if(el&&!el.value) el.value=GD[id].cur;
+      }
+    });
+  }
+}
+
+function applyManual(id, valStr){
+  const cur = parseFloat(valStr);
+  if(isNaN(cur)||cur<=0) return;
+  // Estimate prev close: for VIX/yield assume flat; for others assume ±0.3%
+  const flatIds = ['usvix','yld'];
+  const prev = flatIds.includes(id) ? cur : cur / 1.003;
+  const pct = ((cur - prev) / prev) * 100;
+  GD[id] = {cur: +cur.toFixed(4), prev: +prev.toFixed(4), pct: +pct.toFixed(3)};
+  renderAutoRows();
+  calc();
+  buildMatrix();
+  // Update chip
+  const filled = Object.keys(GD).length;
+  document.getElementById('chip-status').className = filled>=9?'hchip live':'hchip stale';
+  document.getElementById('chip-status').textContent = filled>=9?'MANUAL':'PARTIAL';
+  document.getElementById('s-fetch').textContent = 'manual';
+}
+
+/* ─── Fetch Timeout — shows banner after 15s ─────────────────────────── */
+let fetchTimer = null;
+function startFetchTimer(){
+  clearTimeout(fetchTimer);
+  fetchTimer = setTimeout(()=>{
+    const banner = document.getElementById('timeout-banner');
+    if(banner) banner.classList.add('show');
+    toast('⏱️ Taking long — try manual entry');
+  }, 15000);
+}
+function clearFetchTimer(){
+  clearTimeout(fetchTimer);
+  document.getElementById('timeout-banner')?.classList.remove('show');
+}
+
+async function tryAllEndpoints(syms){
+  const urls = yahooUrls(syms);
+  for(const url of urls){
+    for(const px of PROXIES){
+      try{
+        const r = await fetch(px(url), {
+          signal: AbortSignal.timeout(8000),
+          headers: {'Accept':'application/json'}
+        });
+        if(!r.ok) continue;
+        const data = await r.json();
+        if(data?.quoteResponse?.result?.length) return {data, url, px:px.toString().slice(5,35)};
+      }catch{}
+    }
+  }
+  return null;
 }
 
 async function fetchData(){
@@ -976,11 +1580,14 @@ async function fetchData(){
   renderCtx();
   const ctx=getTimeContext();
 
-  const syms=INDS.map(i=>i.sym).join(',');
-  const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketChangePercent`;
+  const syms=INDS.map(i=>i.sym);
   let ok=0;
+  startFetchTimer();
   try{
-    const data=await tryFetch(url);
+    fs.textContent='Trying 5 proxies × 2 endpoints...';
+    const result = await tryAllEndpoints(syms);
+    if(!result) throw new Error('all combinations failed');
+    const {data} = result;
     const quotes=data?.quoteResponse?.result||[];
     for(const q of quotes){
       const ind=INDS.find(i=>i.sym===q.symbol);if(!ind)continue;
@@ -1004,14 +1611,18 @@ async function fetchData(){
       document.getElementById('chip-status').className='hchip stale';
       document.getElementById('chip-status').textContent='PARTIAL';
     }
-    toast(`✅ ${ok} indicators fetched`);
+    clearFetchTimer();toast(`✅ ${ok} indicators fetched`);
   }catch{
-    fb.className='fbar err';
-    ft.style.color='var(--rd)';ft.textContent='❌ Fetch failed';
-    fs.textContent='Check internet and retry — enter manually if needed';
+    clearFetchTimer();fb.className='fbar err';
+    ft.style.color='var(--rd)';ft.textContent='❌ All 5 proxies failed';
+    fs.textContent='All CORS proxies down. Try again in 2 min, or enter values manually below.';
     document.getElementById('chip-status').className='hchip stale';
     document.getElementById('chip-status').textContent='OFFLINE';
-    toast('❌ Fetch failed — check internet');
+    toast('❌ Fetch failed — proxies down, enter manually');
+    setTimeout(()=>{
+      ft.textContent='⚠️ Enter values manually';
+      fs.textContent='S&P/DOW/VIX: moneycontrol.com · Crude/Gold: investing.com · USD/INR: rbi.org.in';
+    }, 3000);
   }
   renderAutoRows();calc();buildMatrix();
   btn.disabled=false;btn.innerHTML='⚡ FETCH';
@@ -1047,30 +1658,30 @@ function calc(){
   const gap=gn-np,trend=gn-g6;
   const gs=gap>=200?2:gap>=80?1:gap>=-80?0:gap>=-200?-1:-2;
   const ts=trend>=100?2:trend>=30?1:trend>=-30?0:trend>=-100?-1:-2;
-  sc+=gs*0.20+ts*0.06;if(gs>0)bull++;else if(gs<0)bear++;else neut++;
-  rows.push({n:'GIFT Nifty Gap',s:gs,wt:0.20,sig:(gap>=0?'+':'')+gap+'pts'});
-  rows.push({n:'GIFT Trend 6→8:45',s:ts,wt:0.06,sig:(trend>=0?'+':'')+trend+'pts'});
+  sc+=gs*0.1905+ts*0.0572;if(gs>0)bull++;else if(gs<0)bear++;else neut++;
+  rows.push({n:'GIFT Nifty Gap',s:gs,wt:0.1905,sig:(gap>=0?'+':'')+gap+'pts'});
+  rows.push({n:'GIFT Trend 6→8:45',s:ts,wt:0.0572,sig:(trend>=0?'+':'')+trend+'pts'});
   const fii=gv('fii',0);const fs2=fii>=1000?2:fii>=200?1:fii>=-200?0:fii>=-1000?-1:-2;
-  sc+=fs2*0.08;if(fs2>0)bull++;else if(fs2<0)bear++;else neut++;
-  rows.push({n:'FII Net Flow',s:fs2,wt:0.08,sig:'₹'+fii+'Cr'});
+  sc+=fs2*0.0762;if(fs2>0)bull++;else if(fs2<0)bear++;else neut++;
+  rows.push({n:'FII Net Flow',s:fs2,wt:0.0762,sig:'₹'+fii+'Cr'});
   const pcr=gv('pcr',1.0);const ps=pcr>=1.3?2:pcr>=1.1?1:pcr>=0.9?0:pcr>=0.7?-1:-2;
-  sc+=ps*0.05;if(ps>0)bull++;else if(ps<0)bear++;else neut++;
-  rows.push({n:'Put-Call Ratio',s:ps,wt:0.05,sig:'PCR '+pcr.toFixed(2)});
+  sc+=ps*0.0476;if(ps>0)bull++;else if(ps<0)bear++;else neut++;
+  rows.push({n:'Put-Call Ratio',s:ps,wt:0.0476,sig:'PCR '+pcr.toFixed(2)});
   const cc=parseInt(gv('close_char',0));
-  sc+=cc*0.04;if(cc>0)bull++;else if(cc<0)bear++;else neut++;
-  rows.push({n:'Prev Day Close',s:cc,wt:0.04,sig:['Str↑↑','Mild↑','Neutral','Mild↓','Str↓↓'][cc+2]});
+  sc+=cc*0.0381;if(cc>0)bull++;else if(cc<0)bear++;else neut++;
+  rows.push({n:'Prev Day Close',s:cc,wt:0.0381,sig:['Str↑↑','Mild↑','Neutral','Mild↓','Str↓↓'][cc+2]});
   const mp=gv('max_pain',gn),mpg=mp-gn;
   const ms=mpg>=300?2:mpg>=100?1:Math.abs(mpg)<100?0:mpg<=-100?-1:-2;
-  sc+=ms*0.03;if(ms>0)bull++;else if(ms<0)bear++;else neut++;
-  rows.push({n:'Max Pain Gap',s:ms,wt:0.03,sig:(mpg>=0?'+':'')+mpg+'pts'});
-  const n50a=gv('n50adv',25),n50d=gv('n50dma',50),bnfa=gv('bnfadv',6);
+  sc+=ms*0.0286;if(ms>0)bull++;else if(ms<0)bear++;else neut++;
+  rows.push({n:'Max Pain Gap',s:ms,wt:0.0286,sig:(mpg>=0?'+':'')+mpg+'pts'});
+  const n50a=gv('n50adv',25),n50d=gv('n50dma',50),bnfa=gv('bnfadv',7);
   const n50s=n50a>=40?2:n50a>=30?1:n50a>=20?0:n50a>=12?-1:-2;
   const ds=n50d>=70?2:n50d>=50?1:n50d>=35?0:n50d>=20?-1:-2;
-  const bs=bnfa>=10?2:bnfa>=7?1:bnfa>=5?0:bnfa>=3?-1:-2;
+  const bs=bnfa>=12?2:bnfa>=8?1:bnfa>=6?0:bnfa>=4?-1:-2; // v1.2.5: BNF=14 stocks
   sc+=n50s*0.02+ds*0.01+bs*0.02;
   rows.push({n:'Nifty A/D',s:n50s,wt:0.02,sig:n50a+'/50'});
   rows.push({n:'200-DMA Breadth',s:ds,wt:0.01,sig:n50d+'%'});
-  rows.push({n:'BNF A/D',s:bs,wt:0.02,sig:bnfa+'/12'});
+  rows.push({n:'BNF A/D',s:bs,wt:0.02,sig:bnfa+'/14'});
   sc=Math.round(sc*100)/100;SCORE=sc;
 
   // Direction
@@ -1084,7 +1695,7 @@ function calc(){
 
   // Update breadth
   document.getElementById('n50dec').textContent=50-n50a;
-  document.getElementById('bnfdec').textContent=12-bnfa;
+  document.getElementById('bnfdec').textContent=14-bnfa; // v1.2.5: BNF=14
   const n50lbl=['HOLLOW','NARROW','MIXED','BROAD','VERY BROAD'][n50s+2];
   const bnflbl=['HOLLOW','NARROW','SPLIT','BROAD','VERY BROAD'][bs+2];
   const nel=document.getElementById('n50sig'),bel=document.getElementById('bnfsig');
@@ -1167,6 +1778,8 @@ function fmtShort(d){return d.toLocaleDateString('en-IN',{day:'2-digit',month:'s
 function getExpiries(idxType){
   const today=new Date();today.setHours(0,0,0,0);
   const expiries=[];
+  // Safety: ensure holiday dates also have hours zeroed
+  const todayT=today.getTime();
 
   // ── NSE 2026 known holidays ──────────────────────────────────────────
   const H=['2026-01-26','2026-03-09','2026-03-16','2026-03-23',
@@ -1178,7 +1791,7 @@ function getExpiries(idxType){
 
   function isHol(d){
     const dw=d.getDay();
-    return dw===0||dw===6||H.includes(d.getTime());
+    const dt=new Date(d);dt.setHours(0,0,0,0);return dw===0||dw===6||H.includes(dt.getTime());
   }
   function adjHol(d){
     const r=new Date(d);
@@ -1199,9 +1812,9 @@ function getExpiries(idxType){
     for(let w=0;w<6;w++){
       const base=new Date(today);
       base.setDate(base.getDate()+w*7);
-      let exp=getNextWeekday(base,2);// next Tuesday (NF weekly expiry day)
+      let exp=getNextWeekday(base,2);// Tuesday = dow 2
       exp=adjHol(exp);
-      if(exp>today&&!expiries.find(e=>e.date.getTime()===exp.getTime()))
+      if(exp.getTime()>todayT&&!expiries.find(e=>e.date.getTime()===exp.getTime()))
         expiries.push({date:exp,label:'Nifty Weekly (Tue)',type:'WK'});
     }
   }
@@ -1213,7 +1826,7 @@ function getExpiries(idxType){
     const yr=now.getFullYear()+Math.floor((now.getMonth()+m)/12);
     let exp=getLastMonday(mo,yr);
     exp=adjHol(exp);
-    if(exp>today&&!expiries.find(e=>e.date.getTime()===exp.getTime())){
+    if(exp.getTime()>todayT&&!expiries.find(e=>e.date.getTime()===exp.getTime())){
       const lbl=idxType==='BN'?'BNF Monthly':'Nifty Monthly';
       expiries.push({date:exp,label:lbl,type:'MON'});
     }
@@ -1229,7 +1842,7 @@ function getDTE(d){
 }
 
 /* ═══════════════════════════════════════════════
-   AUTO STRATEGY DECISION ENGINE  v1.2.2
+   AUTO STRATEGY DECISION ENGINE  v1.2.5
    ─────────────────────────────────────────────
    Inputs: score, vix, isPreEvent
    Returns: {mode, creditFirst, reason, whyText}
@@ -1324,12 +1937,13 @@ function autoDecide(score,vix,isPreEvent){
    ESTIMATORS
    ═══════════════════════════════════════════════ */
 function estimateCredit(width,dte,vix){
-  const base=0.42;
-  const dteMult=dte<=2?1.4:dte<=5?1.15:dte<=10?1.0:dte<=17?0.78:dte<=21?0.62:0.48;
-  const vixMult=vix<12?0.55:vix<14?0.80:vix<16?1.0:vix<18?1.20:1.38;
-  const pct=Math.min(0.60,base*dteMult*vixMult);
+  const base=0.38;
+  // FIXED v1.2.5: long DTE = richer premium (more time value to sell)
+  const dteMult=dte<=3?0.70:dte<=7?0.85:dte<=14?1.00:dte<=21?1.20:dte<=35?1.45:1.70;
+  const vixMult=vix<12?0.55:vix<14?0.78:vix<16?1.0:vix<18?1.22:1.45;
+  const pct=Math.min(0.65,base*dteMult*vixMult);
   const mid=Math.round(width*pct/5)*5;
-  return{min:Math.round(mid*0.80/5)*5,mid,max:Math.round(mid*1.20/5)*5};
+  return{min:Math.round(mid*0.80/5)*5,mid,max:Math.round(mid*1.22/5)*5};
 }
 
 function estimateDebitCost(width,dte,vix){
@@ -1403,7 +2017,7 @@ function dteConviction(dte,score,mode,idxType){
 function defaultWidth(idx){return idx==='BN'?400:200;}
 
 /* ═══════════════════════════════════════════════
-   BUILD MATRIX — DUAL INDEPENDENT INDICES v1.2.2
+   BUILD MATRIX — DUAL INDEPENDENT INDICES v1.2.5
    
    · Nifty 50  and Bank Nifty built independently
    · Each has own: spot price, ATR, lot size, lots
@@ -1575,10 +2189,458 @@ function buildIC(price,atr,width,lot,lots,vix,exp){
 
 // ── Persist state ──────────────────────────────
 const FLDS=['gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr','max_pain','close_char','n50adv','n50dma','bnfadv','nf_price','nf_atr','nf_lot','nf_lots','bn_price','bn_atr','bn_lot','bn_lots'];
+// ═══════════════════════════════════════════════════════════════
+// v1.2.5 — TIMESTAMP SYSTEM
+// Each field stores {value, ts} in localStorage independently
+// Small timestamp shown below field after save
+// ═══════════════════════════════════════════════════════════════
+const TS_KEY = 'mr-ts-v1'; // field timestamps store
+function getTSStore(){ try{return JSON.parse(localStorage.getItem(TS_KEY))||{};}catch{return{};} }
+function saveTSStore(s){ try{localStorage.setItem(TS_KEY,JSON.stringify(s));}catch{} }
+
+function stampField(id){
+  const s=getTSStore();
+  s[id]={ts:Date.now(),val:document.getElementById(id)?.value??''};
+  saveTSStore(s);
+  renderTS(id,s[id].ts);
+}
+
+function renderTS(id,ts){
+  const el=document.getElementById('ts-'+id);
+  if(!el)return;
+  if(!ts){el.textContent='';return;}
+  const d=new Date(ts);
+  const now=new Date();
+  const sameDay=d.toDateString()===now.toDateString();
+  const hm=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+  const diffDays=Math.floor((now-d)/86400000);
+  if(sameDay) el.textContent=hm;
+  else if(diffDays===1) el.textContent='yesterday ⚠️';
+  else el.textContent=diffDays+'d ago 🔴';
+  el.style.color=sameDay?'var(--muted)':diffDays===1?'var(--or)':'var(--rd)';
+}
+
+function restoreAllTS(){
+  const s=getTSStore();
+  Object.keys(s).forEach(id=>renderTS(id,s[id]?.ts));
+}
+
+// ── Session lock / edit cycle ─────────────────────────────────
+let MORNING_LOCKED=false, EVENING_LOCKED=false;
+
+function getMorningSaved(){ try{return JSON.parse(localStorage.getItem('mr-morning-saved')||'false');}catch{return false;} }
+function getEveningSaved(){ try{return JSON.parse(localStorage.getItem('mr-evening-saved')||'false');}catch{return false;} }
+
+function lockMorning(){
+  MORNING_LOCKED=true;
+  localStorage.setItem('mr-morning-saved','true');
+  // Stamp all morning fields
+  const mFlds=['gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr','max_pain',
+    'close_char','n50adv','n50dma','bnfadv',
+    'm_sp500','m_dow','m_usvix','m_nk','m_hsi','m_crude','m_gold','m_inr','m_yld'];
+  mFlds.forEach(f=>{ const e=document.getElementById(f); if(e&&e.value) stampField(f); });
+  applyLockUI('morning',true);
+  toast('💾 Morning data saved');
+}
+function unlockMorning(){
+  MORNING_LOCKED=false;
+  localStorage.setItem('mr-morning-saved','false');
+  applyLockUI('morning',false);
+  toast('✏️ Edit mode — re-save when done');
+}
+function lockEvening(){
+  EVENING_LOCKED=true;
+  localStorage.setItem('mr-evening-saved','true');
+  const eFlds=['ev_sp500','ev_dow','ev_usvix','ev_nk','ev_hsi','ev_crude','ev_gold','ev_inr','ev_yld',
+    'ev_indiavix','ev_fii','ev_pcr','ev_nifty','ev_bnf','ev_n50adv','ev_bnfadv','ev_maxpain_nf','ev_maxpain_bn'];
+  eFlds.forEach(f=>{ const e=document.getElementById(f); if(e&&e.value) stampField(f); });
+  applyLockUI('evening',true);
+  toast('💾 Evening data saved — delta ready for tomorrow');
+}
+function unlockEvening(){
+  EVENING_LOCKED=false;
+  localStorage.setItem('mr-evening-saved','false');
+  applyLockUI('evening',false);
+  toast('✏️ Edit mode');
+}
+
+function applyLockUI(session, locked){
+  const prefix = session==='morning'?'m':'ev';
+  const ids = session==='morning'
+    ?['gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr','max_pain','close_char',
+      'n50adv','n50dma','bnfadv','m_sp500','m_dow','m_usvix','m_nk','m_hsi','m_crude','m_gold','m_inr','m_yld']
+    :['ev_sp500','ev_dow','ev_usvix','ev_nk','ev_hsi','ev_crude','ev_gold','ev_inr','ev_yld',
+      'ev_indiavix','ev_fii','ev_pcr','ev_nifty','ev_bnf','ev_n50adv','ev_bnfadv','ev_maxpain_nf','ev_maxpain_bn'];
+  ids.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){ el.disabled=locked; el.style.opacity=locked?'0.55':'1'; }
+  });
+  const saveBtn=document.getElementById('btn-save-'+session);
+  const editBtn=document.getElementById('btn-edit-'+session);
+  if(saveBtn) saveBtn.style.display=locked?'none':'inline-block';
+  if(editBtn) editBtn.style.display=locked?'inline-block':'none';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v1.2.5 — TIME LOCK ENGINE
+// Morning entry: opens 8:30 AM IST
+// Evening entry: opens 3:45 PM IST
+// Core scoring: ALWAYS active
+// ═══════════════════════════════════════════════════════════════
+function getISTHour(){
+  const now=new Date();
+  // IST = UTC + 5:30
+  const utc=now.getTime()+now.getTimezoneOffset()*60000;
+  const ist=new Date(utc+19800000);
+  return {h:ist.getHours(), m:ist.getMinutes(), total:ist.getHours()*60+ist.getMinutes()};
+}
+
+function checkTimeLock(){
+  const {total}=getISTHour();
+  const morningOpen = 8*60+30;  // 8:30 AM
+  const eveningOpen = 15*60+45; // 3:45 PM
+
+  const mornOk = total >= morningOpen;
+  const eveOk  = total >= eveningOpen;
+
+  // Morning lock banner
+  const mBanner=document.getElementById('morning-lock-banner');
+  if(mBanner){
+    if(!mornOk){
+      const minsLeft=morningOpen-total;
+      mBanner.style.display='flex';
+      document.getElementById('morning-lock-msg').textContent=
+        `🔒 Entry opens at 8:30 AM IST — in ${Math.floor(minsLeft/60)}h ${minsLeft%60}m`;
+    } else {
+      mBanner.style.display='none';
+    }
+  }
+
+  // Evening tab lock
+  const evBanner=document.getElementById('evening-lock-banner');
+  const evContent=document.getElementById('evening-content');
+  if(evBanner && evContent){
+    if(!eveOk){
+      const minsLeft=eveningOpen-total;
+      evBanner.style.display='flex';
+      evContent.style.display='none';
+      document.getElementById('evening-lock-msg').textContent=
+        `🔒 Evening session opens at 3:45 PM IST — in ${Math.floor(minsLeft/60)}h ${minsLeft%60}m`;
+    } else {
+      evBanner.style.display='none';
+      evContent.style.display='block';
+    }
+  }
+
+  // Disable morning inputs if before 8:30
+  ['gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr','max_pain','close_char',
+   'n50adv','n50dma','bnfadv','m_sp500','m_dow','m_usvix','m_nk','m_hsi','m_crude','m_gold','m_inr','m_yld'
+  ].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el && !mornOk){ el.disabled=true; el.style.opacity='0.4'; }
+    else if(el && mornOk && !MORNING_LOCKED){ el.disabled=false; el.style.opacity='1'; }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v1.2.5 — SCORE DELTA (vs yesterday)
+// Saved on morning save, compared next morning
+// ═══════════════════════════════════════════════════════════════
+function saveScoreDelta(){
+  try{
+    localStorage.setItem('mr-prev-score', JSON.stringify({
+      score: SCORE,
+      dir: DIRECTION,
+      ts: Date.now()
+    }));
+  }catch{}
+}
+
+function renderScoreDelta(){
+  const el=document.getElementById('score-delta-row');
+  if(!el) return;
+  try{
+    const prev=JSON.parse(localStorage.getItem('mr-prev-score')||'null');
+    if(!prev||!SCORE){ el.style.display='none'; return; }
+    const delta=SCORE-prev.score;
+    const d=new Date(prev.ts);
+    const hm=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+    let label,col;
+    if(Math.abs(delta)<0.15){label='→ STABLE';col='var(--muted)';}
+    else if(delta>=0.4){label='↑ STRENGTHENING';col='var(--gn)';}
+    else if(delta>=0.15){label='↑ Improving';col='var(--lm)';}
+    else if(delta<=-0.4){label='↓ WEAKENING';col='var(--rd)';}
+    else{label='↓ Softening';col='var(--or)';}
+    if(prev.score*SCORE<0) {label='↻ REVERSING';col='var(--tl)';}
+    el.style.display='flex';
+    document.getElementById('delta-prev').textContent=(prev.score>=0?'+':'')+prev.score.toFixed(2)+' ('+hm+')';
+    document.getElementById('delta-val').textContent=(delta>=0?'+':'')+delta.toFixed(2)+' '+label;
+    document.getElementById('delta-val').style.color=col;
+  }catch{ el.style.display='none'; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v1.2.5 — BNF vs NF RECOMMENDATION + MORNING CHECKLIST
+// ═══════════════════════════════════════════════════════════════
+function getBNFSectorScore(){
+  const rbi=document.querySelector('input[name="rbi-stance"]:checked')?.value||'neutral';
+  const liq=document.querySelector('input[name="bnf-liq"]:checked')?.value||'neutral';
+  const news=document.querySelector('input[name="bnf-news"]:checked')?.value||'none';
+  let adj=0, flags=[];
+  if(rbi==='dovish'){adj+=0.3;flags.push('✅ RBI dovish — rate cuts favour banks');}
+  else if(rbi==='hawkish'){adj-=0.4;flags.push('⚠️ RBI hawkish — NIM pressure on banks');}
+  if(liq==='surplus'){adj+=0.2;flags.push('✅ Liquidity surplus — cheap interbank money');}
+  else if(liq==='deficit'){adj-=0.3;flags.push('⚠️ Liquidity deficit — margin pressure');}
+  if(news==='hdfc'){adj-=0.5;flags.push('🚨 HDFC Bank event — BNF unpredictable');}
+  else if(news==='icici'){adj-=0.4;flags.push('🚨 ICICI Bank event — BNF risk elevated');}
+  else if(news==='both'){adj-=0.8;flags.push('🚨🚨 Both HDFC+ICICI event — avoid BNF today');}
+  try{localStorage.setItem('mr-bnf-sector',JSON.stringify({rbi,liq,news}));}catch{}
+  return {adj, flags};
+}
+
+function saveBNFSector(){
+  // auto-called on any radio change
+  try{
+    const rbi=document.querySelector('input[name="rbi-stance"]:checked')?.value||'neutral';
+    const liq=document.querySelector('input[name="bnf-liq"]:checked')?.value||'neutral';
+    const news=document.querySelector('input[name="bnf-news"]:checked')?.value||'none';
+    localStorage.setItem('mr-bnf-sector',JSON.stringify({rbi,liq,news}));
+  }catch{}
+  renderIndexRec();
+}
+
+function loadBNFSector(){
+  try{
+    const s=JSON.parse(localStorage.getItem('mr-bnf-sector')||'null');
+    if(!s) return;
+    const r=document.querySelector(`input[name="rbi-stance"][value="${s.rbi}"]`);
+    const l=document.querySelector(`input[name="bnf-liq"][value="${s.liq}"]`);
+    const n=document.querySelector(`input[name="bnf-news"][value="${s.news}"]`);
+    if(r) r.checked=true;
+    if(l) l.checked=true;
+    if(n) n.checked=true;
+  }catch{}
+}
+
+function renderIndexRec(){
+  const el=document.getElementById('index-rec-card');
+  if(!el||!SCORE) return;
+  const n50a=gv('n50adv',25), bnfa=gv('bnfadv',7);
+  const bnfBreath=bnfa/14*100, nfBreath=n50a/50*100;
+  const fii=gv('fii',0);
+  const {adj,flags}=getBNFSectorScore();
+  const bnfScore=bnfBreath+adj-(fii<0?5:0);
+  const nfScore=nfBreath;
+  let rec, recStars, reasons=[];
+  if(bnfScore>nfScore+10){ rec='BANK NIFTY'; recStars='★★★★'; }
+  else if(bnfScore>nfScore){ rec='BANK NIFTY'; recStars='★★★'; }
+  else if(nfScore>bnfScore+5){ rec='NIFTY 50'; recStars='★★★'; }
+  else { rec='EITHER'; recStars='★★★'; reasons.push('→ Check live premiums at 9:20 AM'); }
+  if(bnfBreath>nfBreath) reasons.push(`✅ BNF breadth ${bnfa}/14 (${bnfBreath.toFixed(0)}%) > NF ${n50a}/50 (${nfBreath.toFixed(0)}%)`);
+  else reasons.push(`⚠️ NF breadth ${n50a}/50 (${nfBreath.toFixed(0)}%) > BNF ${bnfa}/14 (${bnfBreath.toFixed(0)}%)`);
+  flags.forEach(f=>reasons.push(f));
+  if(fii<0) reasons.push('⚠️ FII selling — BNF sector-sensitive');
+  const col=rec==='BANK NIFTY'?'var(--tl)':rec==='NIFTY 50'?'var(--lm)':'var(--muted)';
+  el.innerHTML=`
+    <div style="font-size:9px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:6px">TRADE TODAY</div>
+    <div style="font-size:18px;font-weight:800;color:${col};margin-bottom:4px">${rec} <span style="font-size:13px">${recStars}</span></div>
+    <div style="font-size:10px;line-height:1.7;color:var(--navy)">${reasons.join('<br>')}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v1.2.5 — OI STRIKE ENGINE (real-time reactive)
+// Recalculates on every keystroke in OI input fields
+// ═══════════════════════════════════════════════════════════════
+function r5(x){ return Math.round(x/5)*5; }
+
+function calcOIScenario(sell, buy, lot, lots, dte, vix, price, atr){
+  const width=buy-sell;
+  if(width<=0||sell<=0||buy<=0) return null;
+  const dist=Math.abs(sell-price);
+  const dm=atr>0?dist/atr:1.5;
+  const dteMult=dte<=3?0.70:dte<=7?0.85:dte<=14?1.00:dte<=21?1.20:dte<=35?1.45:1.70;
+  const vixMult=vix<12?0.55:vix<14?0.78:vix<16?1.0:vix<18?1.22:1.45;
+  const distF=dm<=1.0?1.15:dm<=1.5?1.0:dm<=2.0?0.82:0.65;
+  const pct=Math.min(0.65,0.38*dteMult*vixMult*distF);
+  const mid=r5(width*pct);
+  const mn=r5(mid*0.80), mx=r5(mid*1.22);
+  const maxP=mid*lot*lots, maxL=(width-mid)*lot*lots;
+  const rr=mid>0?(width-mid)/mid:99;
+  const wpBase=0.72;
+  const wDte=dte<=3?1.05:dte<=7?1.0:dte<=14?0.95:dte<=21?0.92:0.88;
+  const wDist=dm>=2?1.10:dm>=1.5?1.0:0.88;
+  const wp=Math.min(92,Math.max(48,Math.round(wpBase*wDte*wDist*100)));
+  let st;
+  if(rr<=1.5&&wp>=72) st=5;
+  else if(rr<=2.0&&wp>=65) st=4;
+  else if(rr<=3.0) st=3;
+  else if(rr<=4.0) st=2;
+  else st=1;
+  return {sell,buy,width,mid,mn,mx,maxP,maxL,rr,wp,st,dm,dist};
+}
+
+function validateOIStrikes(sell,buy,price,atr,strat){
+  const errs=[],warns=[];
+  const width=buy-sell;
+  if(width<=0){ errs.push('Buy must be above sell for Bear Call'); return{errs,warns}; }
+  const dist=Math.abs(sell-price), dm=dist/atr;
+  if(strat==='bear_call'&&sell<price) warns.push(`⚠️ Sell ${sell.toLocaleString('en-IN')} below price — ITM, very high risk`);
+  if(dm<0.5) warns.push(`⚠️ Strike only ${dm.toFixed(1)}×ATR from price — too close`);
+  if(dm>3.5) warns.push(`⚠️ Strike ${dm.toFixed(1)}×ATR from price — very far, minimal credit`);
+  return{errs,warns};
+}
+
+function renderOIStrikePanel(idx){
+  const isNF=(idx==='NF');
+  const price=gv(isNF?'nf_price':'bn_price', isNF?25700:61500);
+  const atr=gv(isNF?'nf_atr':'bn_atr', isNF?180:450);
+  const lot=gv(isNF?'nf_lot':'bn_lot', isNF?75:15);
+  const lots=gv(isNF?'nf_lots':'bn_lots',1);
+  const vix=gv('india_vix',14);
+  const dte=parseInt(document.getElementById((isNF?'nf':'bn')+'-oi-dte')?.value||'7');
+
+  const callSell=parseFloat(document.getElementById((isNF?'nf':'bn')+'-oi-call-sell')?.value||'0');
+  const callBuy=parseFloat(document.getElementById((isNF?'nf':'bn')+'-oi-call-buy')?.value||'0');
+
+  if(!callSell||!callBuy){ return; }
+  const {errs,warns}=validateOIStrikes(callSell,callBuy,price,atr,'bear_call');
+  const panel=document.getElementById((isNF?'nf':'bn')+'-oi-result');
+  if(!panel) return;
+
+  if(errs.length>0){
+    panel.innerHTML=`<div style="color:var(--rd);font-size:10px;padding:8px">${errs.join('<br>')}</div>`;
+    return;
+  }
+
+  const sc=calcOIScenario(callSell,callBuy,lot,lots,dte,vix,price,atr);
+  if(!sc){ panel.innerHTML=''; return; }
+
+  // ATR-based for comparison
+  const atrSell=r5(price+atr*1.5), atrBuy=atrSell+(callBuy-callSell);
+  const atrSc=calcOIScenario(atrSell,atrBuy,lot,lots,dte,vix,price,atr);
+
+  const f=n=>Math.round(n).toLocaleString('en-IN');
+  const fr=n=>'₹'+Math.round(n).toLocaleString('en-IN');
+  const betterOI=sc.mid>=(atrSc?.mid||0);
+
+  panel.innerHTML=`
+    ${warns.length?`<div style="font-size:9px;color:var(--or);padding:4px 0">${warns.join('<br>')}</div>`:''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+      <div style="background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="font-size:8px;font-weight:700;color:var(--muted);margin-bottom:4px">ATR-BASED</div>
+        <div style="font-size:10px">Sell <b>${f(atrSell)}</b> / Buy <b>${f(atrBuy)}</b></div>
+        <div style="font-size:10px;color:var(--gn)">₹${atrSc?.mn||0}–${atrSc?.mx||0}/unit</div>
+        <div style="font-size:9px">P: ${fr(atrSc?.maxP||0)} | L: ${fr(atrSc?.maxL||0)}</div>
+        <div style="font-size:9px">R:R ${(atrSc?.rr||0).toFixed(1)} | Win ${atrSc?.wp||0}% | ${'⭐'.repeat(atrSc?.st||1)}</div>
+      </div>
+      <div style="background:${betterOI?'var(--gn-bg)':'var(--bg1)'};border:1px solid ${betterOI?'var(--gn-br)':'var(--border)'};border-radius:8px;padding:10px">
+        <div style="font-size:8px;font-weight:700;color:var(--muted);margin-bottom:4px">OI-BASED ${betterOI?'✅ BETTER':''}</div>
+        <div style="font-size:10px">Sell <b>${f(callSell)}</b> / Buy <b>${f(callBuy)}</b></div>
+        <div style="font-size:10px;color:var(--gn)">₹${sc.mn}–${sc.mx}/unit</div>
+        <div style="font-size:9px">P: ${fr(sc.maxP)} | L: ${fr(sc.maxL)}</div>
+        <div style="font-size:9px">R:R ${sc.rr.toFixed(1)} | Win ${sc.wp}% | ${'⭐'.repeat(sc.st)}</div>
+      </div>
+    </div>
+    <div style="font-size:9px;color:var(--muted);margin-top:8px;text-align:center">
+      Exit at ${fr(Math.round(sc.maxP*0.4))} profit  ·  SL at ${fr(Math.round(sc.maxP*0.8))} loss
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v1.2.5 — SMART MONEY VERDICT
+// ═══════════════════════════════════════════════════════════════
+function renderSMVerdict(){
+  const el=document.getElementById('sm-verdict');
+  if(!el) return;
+  const fiiLong=parseFloat(document.getElementById('sm_fii_long')?.value||0);
+  const fiiShort=parseFloat(document.getElementById('sm_fii_short')?.value||0);
+  const fiiCall=parseFloat(document.getElementById('sm_fii_call')?.value||0);
+  const fiiPut=parseFloat(document.getElementById('sm_fii_put')?.value||0);
+  const propLong=parseFloat(document.getElementById('sm_prop_long')?.value||0);
+  const propShort=parseFloat(document.getElementById('sm_prop_short')?.value||0);
+  const callWall=parseFloat(document.getElementById('sm_call_wall')?.value||0);
+  const putWall=parseFloat(document.getElementById('sm_put_wall')?.value||0);
+  const pcrToday=parseFloat(document.getElementById('sm_pcr_today')?.value||0);
+  const pcrPrev=parseFloat(document.getElementById('sm_pcr_prev')?.value||0);
+
+  if(!fiiLong&&!fiiShort&&!callWall){ el.innerHTML='<div style="font-size:9px;color:var(--muted)">Enter data above to see Smart Money verdict</div>'; return; }
+
+  const fiiNet=fiiLong-fiiShort;
+  const fiiOptNet=fiiCall-fiiPut;
+  const propNet=propLong-propShort;
+  const pcrDelta=pcrPrev>0?pcrToday-pcrPrev:0;
+  const f=n=>Math.abs(n).toLocaleString('en-IN');
+
+  let lines=[];
+  // FII Futures
+  if(fiiNet!==0){
+    const dir=fiiNet>0?'✅ NET LONG':'🔴 NET SHORT';
+    const col=fiiNet>0?'var(--gn)':'var(--rd)';
+    lines.push(`<div>FII Futures: <span style="color:${col};font-weight:700">${dir}</span> (${fiiNet>0?'+':''}${f(fiiNet)} contracts)</div>`);
+  }
+  // FII Options
+  if(fiiOptNet!==0){
+    const dir=fiiOptNet>0?'✅ NET CALLS (bullish hedge)':'⚠️ NET PUTS (defensive)';
+    lines.push(`<div>FII Options: <span style="font-weight:600">${dir}</span></div>`);
+  }
+  // Prop desk
+  if(propNet!==0){
+    const dir=propNet<0?'⚠️ NET SHORT (contra)':'ℹ️ NET LONG';
+    lines.push(`<div>Prop Desk: <span style="font-weight:600">${dir}</span> (${propNet>0?'+':''}${f(propNet)} contracts)</div>`);
+  }
+  // OI walls
+  if(callWall>0&&putWall>0){
+    const spot=gv('bn_price',gv('nf_price',25700));
+    const distUp=callWall-spot, distDn=spot-putWall;
+    lines.push(`<div style="margin-top:6px"><b>OI Walls:</b></div>`);
+    lines.push(`<div>📵 Resistance: <b>${callWall.toLocaleString('en-IN')}</b> (${distUp>0?'+':''}${Math.round(distUp)} pts above)</div>`);
+    lines.push(`<div>🛡️ Support: <b>${putWall.toLocaleString('en-IN')}</b> (${Math.round(distDn)} pts below)</div>`);
+  }
+  // PCR trend
+  if(pcrToday>0&&pcrPrev>0){
+    const pcrTag=pcrDelta>0.1?'↑ RISING (puts building — caution)':pcrDelta<-0.1?'↓ FALLING (puts unwinding — caution)':'→ STABLE';
+    lines.push(`<div style="margin-top:4px">PCR: ${pcrToday.toFixed(2)} <span style="color:${Math.abs(pcrDelta)>0.1?'var(--or)':'var(--muted)'}">${pcrTag}</span></div>`);
+  }
+
+  // Consensus
+  let bullPts=0;
+  if(fiiNet>0) bullPts++;
+  if(fiiOptNet>0) bullPts++;
+  if(propNet<0) bullPts++; // prop contra = bullish
+  const consensus=bullPts>=2?'BULLISH 🟢':bullPts===1?'MILDLY BULLISH 🟡':'BEARISH 🔴';
+  lines.push(`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-weight:700">SMART MONEY: ${consensus}</div>`);
+
+  el.innerHTML=lines.join('');
+}
+
+function saveSMData(){
+  const fields=['sm_fii_long','sm_fii_short','sm_fii_call','sm_fii_put',
+    'sm_prop_long','sm_prop_short','sm_call_wall','sm_put_wall','sm_pcr_today','sm_pcr_prev'];
+  const data={};
+  fields.forEach(f=>{ const e=document.getElementById(f); if(e) data[f]=e.value; });
+  try{
+    localStorage.setItem('mr-sm-data',JSON.stringify(data));
+    fields.forEach(f=>stampField(f));
+    toast('💾 Smart Money data saved');
+  }catch{ toast('❌ Save failed'); }
+}
+
+function loadSMData(){
+  try{
+    const d=JSON.parse(localStorage.getItem('mr-sm-data')||'null');
+    if(!d) return;
+    Object.keys(d).forEach(f=>{ const e=document.getElementById(f); if(e) e.value=d[f]; });
+  }catch{}
+}
+
 function saveAll(){
   const s={};FLDS.forEach(f=>{const e=document.getElementById(f);if(e)s[f]=e.value});
-  s.gd=GD;s.ft=document.getElementById('s-fetch').textContent;s.pev=PRE_EVENT;s.evtype=EVENT_TYPE;
-  try{localStorage.setItem('mr2-state',JSON.stringify(s));toast('💾 Saved')}catch{toast('❌ Save failed')}
+  s.gd=GD;s.ft=document.getElementById('s-fetch')?.textContent||'';s.pev=PRE_EVENT;s.evtype=EVENT_TYPE;
+  try{localStorage.setItem('mr2-state',JSON.stringify(s));
+    lockMorning();
+    saveScoreDelta();
+    toast('💾 Saved — score delta updated');
+  }catch{toast('❌ Save failed')}
 }
 function loadState(){
   try{
@@ -1621,6 +2683,16 @@ loadState();
 calc();
 buildMatrix();
 updateMkt();
+// v1.2.5 additions
+restoreAllTS();
+checkTimeLock();
+setInterval(checkTimeLock, 60000);
+loadBNFSector();
+loadSMData();
+renderIndexRec();
+renderScoreDelta();
+if(getMorningSaved()) applyLockUI('morning',true);
+if(getEveningSaved()) applyLockUI('evening',true);
 </script>
 </body>
 </html>
