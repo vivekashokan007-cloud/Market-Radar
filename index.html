@@ -274,6 +274,18 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
 .strat-tab.on{color:var(--am);border-bottom-color:var(--am);}
 .strat-page{display:none;padding-bottom:40px;}
 .strat-page.on{display:block;}
+
+/* ── Entry Time Signal ──────────────────────────── */
+.entry-banner{margin:10px 14px 0;border-radius:var(--r);padding:12px 14px;border:1px solid var(--border);display:flex;align-items:center;gap:12px;}
+.entry-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;animation:pulse 2s infinite;}
+.entry-time{font-family:var(--font-mono);font-size:20px;font-weight:700;line-height:1;}
+.entry-phase{font-size:8px;letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-top:2px;}
+.entry-msg{font-size:9.5px;color:var(--muted);margin-top:3px;line-height:1.5;}
+.entry-split{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 14px 0;}
+.entry-idx{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;}
+.entry-idx-lbl{font-size:7.5px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;}
+.entry-idx-sig{font-size:10px;font-weight:700;}
+.entry-idx-note{font-size:8px;color:var(--muted);margin-top:2px;line-height:1.4;}
 </style>
 </head>
 <body>
@@ -282,7 +294,7 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
 <header>
   <div>
     <div class="hlogo">MARKET RADAR
-      <span>OPTIONS INTELLIGENCE · NSE V1.3.0</span>
+      <span>OPTIONS INTELLIGENCE · NSE V1.4.0</span>
     </div>
   </div>
   <div class="hright">
@@ -445,12 +457,22 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
   </div>
   <div class="irow">
     <div class="ilabel">
-      <div class="iname">Put-Call Ratio (PCR)</div>
-      <div class="isrc">NSE Option Chain → top of page</div>
+      <div class="iname">Nifty 50 PCR</div>
+      <div class="isrc">NSE Option Chain → Nifty → top PCR value</div>
     </div>
     <div class="iright">
-      <input class="inp" id="pcr" type="number" placeholder="1.24" step="0.01" oninput="onInput('pcr')">
-      <div class="ts" id="ts-pcr"></div>
+      <input class="inp" id="pcr_nf" type="number" placeholder="1.15" step="0.01" oninput="onInput('pcr_nf')">
+      <div class="ts" id="ts-pcr_nf"></div>
+    </div>
+  </div>
+  <div class="irow">
+    <div class="ilabel">
+      <div class="iname">Bank Nifty PCR</div>
+      <div class="isrc">NSE Option Chain → Bank Nifty → top PCR value</div>
+    </div>
+    <div class="iright">
+      <input class="inp" id="pcr_bn" type="number" placeholder="1.35" step="0.01" oninput="onInput('pcr_bn')">
+      <div class="ts" id="ts-pcr_bn"></div>
     </div>
   </div>
   <div class="irow">
@@ -639,6 +661,30 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
 <!-- ═══════════════ PANEL 3: STRATEGY ═══════════════ -->
 <div class="panel" id="p3">
 
+  <!-- Entry Time Signal -->
+  <div id="entry-banner" class="entry-banner">
+    <div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="entry-dot" id="entry-dot" style="background:var(--muted)"></div>
+        <div class="entry-time" id="entry-time">--:--</div>
+      </div>
+      <div class="entry-phase" id="entry-phase" style="color:var(--muted)">IST · LOADING</div>
+      <div class="entry-msg" id="entry-msg">Initialising...</div>
+    </div>
+  </div>
+  <div class="entry-split">
+    <div class="entry-idx">
+      <div class="entry-idx-lbl">NIFTY 50</div>
+      <div class="entry-idx-sig" id="nf-entry-sig">—</div>
+      <div class="entry-idx-note" id="nf-entry-note">Settles ~09:45 IST</div>
+    </div>
+    <div class="entry-idx">
+      <div class="entry-idx-lbl">BANK NIFTY</div>
+      <div class="entry-idx-sig" id="bn-entry-sig">—</div>
+      <div class="entry-idx-note" id="bn-entry-note">Settles ~10:15 IST</div>
+    </div>
+  </div>
+
   <!-- Sub-nav: NF | BNF -->
   <div style="display:flex;border-bottom:2px solid var(--border);background:var(--bg1)">
     <div class="strat-tab on" id="st0" onclick="switchStrat(0)">📈 NIFTY 50</div>
@@ -660,7 +706,7 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
       </div>
       <div class="igrid-item">
         <div class="igrid-label">Lot Size</div>
-        <input class="igrid-input" id="nf_lot" type="number" placeholder="75" oninput="buildMultiExpiry('NF')">
+        <input class="igrid-input" id="nf_lot" type="number" placeholder="65" oninput="buildMultiExpiry('NF')">
       </div>
       <div class="igrid-item">
         <div class="igrid-label">No. of Lots</div>
@@ -700,7 +746,7 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
       </div>
       <div class="igrid-item">
         <div class="igrid-label">Lot Size</div>
-        <input class="igrid-input" id="bn_lot" type="number" placeholder="15" oninput="buildMultiExpiry('BN')">
+        <input class="igrid-input" id="bn_lot" type="number" placeholder="30" oninput="buildMultiExpiry('BN')">
       </div>
       <div class="igrid-item">
         <div class="igrid-label">No. of Lots</div>
@@ -838,9 +884,10 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
 <script>
 'use strict';
 // ═══════════════════════════════════════════════════════════════
-// MARKET RADAR v1.3.0 — CLEAN ARCHITECTURE
-// Pure manual entry. Zero value = skip from scoring.
-// Time-locked sessions. Per-field timestamps.
+// MARKET RADAR v1.4.0
+// New: Dual PCR (NF+BNF), NSE Holiday Calendar 2026,
+//      9-tier DTE multiplier, Entry Time Signal,
+//      4 bug fixes, corrected lot sizes (NF 65 / BNF 30)
 // ═══════════════════════════════════════════════════════════════
 
 // ── State ─────────────────────────────────────────────────────
@@ -861,7 +908,7 @@ const W = {
   inr:        0.0286,
   yld:        0.0381,
   fii:        0.0762,
-  pcr:        0.0476,
+  pcr:        0.0476,  // uses average of pcr_nf + pcr_bn
   close_char: 0.0381,
   max_pain:   0.0286,
   n50adv:     0.0190,
@@ -869,20 +916,48 @@ const W = {
   bnfadv:     0.0190,
 };
 
+// ── NSE Holiday Calendar 2026 ──────────────────────────────────
+const NSE_HOLIDAYS_2026 = [
+  '2026-01-01','2026-01-26','2026-03-03','2026-03-31',
+  '2026-04-03','2026-04-14','2026-05-01','2026-06-16',
+  '2026-11-09','2026-11-10','2026-11-24','2026-12-25'
+].map(s => new Date(s+'T00:00:00'));
+
+function isTradingDay(d) {
+  const day = d.getDay();
+  if (day === 0 || day === 6) return false; // weekend
+  return !NSE_HOLIDAYS_2026.some(h =>
+    h.getFullYear()===d.getFullYear() &&
+    h.getMonth()===d.getMonth() &&
+    h.getDate()===d.getDate()
+  );
+}
+
+function prevTradingDay(d) {
+  const p = new Date(d);
+  p.setDate(p.getDate() - 1);
+  while (!isTradingDay(p)) p.setDate(p.getDate() - 1);
+  return p;
+}
+
+function actualExpiry(raw) {
+  if (isTradingDay(raw)) return { d: new Date(raw), shifted: false };
+  return { d: prevTradingDay(raw), shifted: true };
+}
+
 // ── Helpers ────────────────────────────────────────────────────
 const gv  = id => { const e=document.getElementById(id); if(!e) return null; const v=parseFloat(e.value); return isNaN(v)?null:v; };
 const gvi = id => { const e=document.getElementById(id); if(!e) return null; const v=parseInt(e.value); return isNaN(v)?null:v; };
 const gs  = id => { const e=document.getElementById(id); if(!e) return null; return e.value||null; };
 const r5  = x  => Math.round(x/5)*5;
+const r100= x  => Math.round(x/100)*100;
 const fi  = n  => Math.abs(Math.round(n)).toLocaleString('en-IN');
 const fr  = n  => '₹'+fi(n);
 const pct = (c,p)=> p>0?(c-p)/p*100:null;
-
-// Zero check — skip from scoring if zero or null
 function valid(v){ return v!==null && v!==0 && !isNaN(v); }
 
 // ── Timestamp system ───────────────────────────────────────────
-const TS_KEY = 'mr130-ts';
+const TS_KEY = 'mr140-ts';
 function getTSStore(){ try{ return JSON.parse(localStorage.getItem(TS_KEY)||'{}'); }catch{ return {}; } }
 function saveTSStore(s){ try{ localStorage.setItem(TS_KEY,JSON.stringify(s)); }catch{} }
 
@@ -916,24 +991,23 @@ function restoreTS(){
 function getIST(){
   const now=new Date();
   const ist=new Date(now.getTime()+now.getTimezoneOffset()*60000+19800000);
-  return ist.getHours()*60+ist.getMinutes();
+  return { h: ist.getHours(), m: ist.getMinutes(), total: ist.getHours()*60+ist.getMinutes() };
 }
 
 function checkLocks(){
-  const t=getIST();
+  const { total: t } = getIST();
   const MORNING=8*60+30;
   const EVENING=15*60+45;
   const mornOk=t>=MORNING;
   const eveOk=t>=EVENING;
 
-  // Morning lock
   const mBanner=document.getElementById('morning-lock');
   if(!mornOk && !RADAR_LOCKED){
     const ml=MORNING-t;
     document.getElementById('morning-msg').textContent=`Opens in ${Math.floor(ml/60)}h ${ml%60}m (8:30 AM IST)`;
     mBanner.classList.add('show');
     setDisabled(['sp500','dow','usvix','nk','hsi','crude','gold','inr','yld',
-      'gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr',
+      'gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr_nf','pcr_bn',
       'max_pain_nf','max_pain_bn','close_char'], true);
     setDisabled(['n50adv','n50dma','bnfadv'],true);
     document.getElementById('breadth-lock').classList.add('show');
@@ -942,7 +1016,6 @@ function checkLocks(){
     mBanner.classList.remove('show');
   }
 
-  // Evening lock
   const eBanner=document.getElementById('evening-lock');
   const eContent=document.getElementById('evening-content');
   if(!eveOk){
@@ -955,14 +1028,91 @@ function checkLocks(){
     eContent.style.display='block';
   }
 
-  // Market status
   const mktOpen=t>=9*60+15 && t<=15*60+30;
   document.getElementById('mkt-dot').style.background=mktOpen?'var(--gn)':'var(--rd)';
   document.getElementById('mkt-label').textContent=mktOpen?'OPEN':'CLOSED';
+
+  // Update entry time signal
+  updateEntrySignal();
 }
 
 function setDisabled(ids, val){
   ids.forEach(id=>{ const e=document.getElementById(id); if(e){ e.disabled=val; e.style.opacity=val?'0.4':'1'; }});
+}
+
+// ── Entry Time Signal ──────────────────────────────────────────
+function getEntrySignal(idx) {
+  const { h, m, total: mins } = getIST();
+  const OPEN  = 9*60+15;
+  const CLOSE = 15*60+30;
+
+  if (mins < OPEN || mins >= CLOSE) {
+    return { label:'MARKET CLOSED', color:'var(--muted)', dot:'var(--muted)', note:'Market hours: 09:15–15:30 IST' };
+  }
+  if (mins < 9*60+30) {
+    return { label:'🔴 AVOID', color:'var(--rd)', dot:'var(--rd)', note:'Opening volatility — IV spike 40–80%, spreads 2–3× wide' };
+  }
+  if (idx==='NF' && mins < 9*60+45) {
+    return { label:'⚠️ CAUTION', color:'var(--am)', dot:'var(--am)', note:'NF still settling — wait 5–10 min for IV to normalise' };
+  }
+  if (idx==='BNF' && mins < 10*60+15) {
+    return { label:'🔴 AVOID', color:'var(--rd)', dot:'var(--rd)', note:'BNF needs 60 min to settle — banking stocks slower' };
+  }
+  if (mins <= 11*60+30) {
+    return { label:'✅ OPTIMAL', color:'var(--gn)', dot:'var(--gn)', note:'Best window — IV normalised, spreads tight, OI reliable' };
+  }
+  if (mins <= 13*60) {
+    return { label:'✅ GOOD', color:'var(--gn)', dot:'var(--gn)', note:'Strong liquidity — OI buildup clearly visible' };
+  }
+  if (mins <= 14*60) {
+    return { label:'⚠️ NEUTRAL', color:'var(--am)', dot:'var(--am)', note:'Lunch drift — low volume, OTM spreads wider than usual' };
+  }
+  if (mins <= 15*60) {
+    return { label:'✅ GOOD', color:'var(--gn)', dot:'var(--gn)', note:'Power hour — direction confirmed, final PCR read' };
+  }
+  return { label:'🔴 AVOID', color:'var(--rd)', dot:'var(--rd)', note:'Closing gamma explosion — exit only, no new positions' };
+}
+
+function getBannerPhase() {
+  const { total: mins } = getIST();
+  if (mins < 9*60+15)  return { phase:'PRE-MARKET', color:'var(--muted)' };
+  if (mins < 9*60+30)  return { phase:'OPENING VOLATILITY', color:'var(--rd)' };
+  if (mins < 10*60+15) return { phase:'SETTLING PHASE', color:'var(--am)' };
+  if (mins <= 11*60+30)return { phase:'OPTIMAL WINDOW', color:'var(--gn)' };
+  if (mins <= 13*60)   return { phase:'MID SESSION', color:'var(--gn)' };
+  if (mins <= 14*60)   return { phase:'LUNCH DRIFT', color:'var(--am)' };
+  if (mins <= 15*60)   return { phase:'POWER HOUR', color:'var(--gn)' };
+  if (mins <= 15*60+30)return { phase:'CLOSING — AVOID', color:'var(--rd)' };
+  return { phase:'MARKET CLOSED', color:'var(--muted)' };
+}
+
+function updateEntrySignal() {
+  const { h, m } = getIST();
+  const hh = String(h).padStart(2,'0'), mm = String(m).padStart(2,'0');
+  const banner = getBannerPhase();
+  const nfSig  = getEntrySignal('NF');
+  const bnSig  = getEntrySignal('BNF');
+
+  const timeEl  = document.getElementById('entry-time');
+  const phaseEl = document.getElementById('entry-phase');
+  const dotEl   = document.getElementById('entry-dot');
+  const msgEl   = document.getElementById('entry-msg');
+  const bannerEl= document.getElementById('entry-banner');
+
+  if (timeEl)  timeEl.textContent = `${hh}:${mm}`;
+  if (phaseEl) { phaseEl.textContent = `IST · ${banner.phase}`; phaseEl.style.color = banner.color; }
+  if (dotEl)   dotEl.style.background = banner.color;
+  if (bannerEl)bannerEl.style.borderColor = banner.color + '66';
+
+  const nfSigEl   = document.getElementById('nf-entry-sig');
+  const nfNoteEl  = document.getElementById('nf-entry-note');
+  const bnSigEl   = document.getElementById('bn-entry-sig');
+  const bnNoteEl  = document.getElementById('bn-entry-note');
+
+  if (nfSigEl)  { nfSigEl.textContent = nfSig.label; nfSigEl.style.color = nfSig.color; }
+  if (nfNoteEl) nfNoteEl.textContent = nfSig.note;
+  if (bnSigEl)  { bnSigEl.textContent = bnSig.label; bnSigEl.style.color = bnSig.color; }
+  if (bnNoteEl) bnNoteEl.textContent = bnSig.note;
 }
 
 // ── onInput — called on every field change ─────────────────────
@@ -975,32 +1125,30 @@ function onInput(id){
 
 // ── Scoring engine ─────────────────────────────────────────────
 function scoreParam(key, val, extra){
-  // All scoring functions return -2 to +2
-  // Zero/null values are SKIPPED (not scored)
   switch(key){
-    case 'gift_gap': // pct
+    case 'gift_gap':
       return val>=0.5?2:val>=0.2?1:val>=-0.2?0:val>=-0.5?-1:-2;
-    case 'gift_trend': // pts
+    case 'gift_trend':
       return val>=100?2:val>=30?1:val>=-30?0:val>=-100?-1:-2;
     case 'sp500': case 'dow':
       return val>=1.0?2:val>=0.3?1:val>=-0.3?0:val>=-1.0?-1:-2;
     case 'nk': case 'hsi':
       return val>=1.5?2:val>=0.5?1:val>=-0.5?0:val>=-1.5?-1:-2;
-    case 'usvix': // inverted — lower VIX = bullish
+    case 'usvix':
       return val<13?2:val<15?1:val<18?0:val<22?-1:-2;
-    case 'crude': // inverted — rising crude = bearish India
+    case 'crude':
       return val<=-1.0?2:val<=-0.3?1:val<=0.3?0:val<=1.0?-1:-2;
-    case 'gold': case 'inr': case 'yld': // inverted
+    case 'gold': case 'inr': case 'yld':
       return val<=-0.5?2:val<=0?1:val<=0.5?0:val<=1?-1:-2;
     case 'fii':
       return val>=2000?2:val>=200?1:val>=-200?0:val>=-2000?-1:-2;
     case 'pcr':
       return val>=1.5?2:val>=1.2?1:val>=1.0?0:val>=0.8?-1:-2;
-    case 'max_pain': { // extra = spot price
+    case 'max_pain': {
       const d=extra-val; return d>=300?2:d>=100?1:Math.abs(d)<100?0:d<=-100?-1:-2;
     }
     case 'close_char':
-      return val; // already -2 to +2
+      return val;
     case 'n50adv':
       return val>=40?2:val>=30?1:val>=20?0:val>=12?-1:-2;
     case 'n50dma':
@@ -1012,18 +1160,23 @@ function scoreParam(key, val, extra){
 }
 
 function calcScore(){
-  // Read all values — skip zeros
   const ev = {
     sp500_c:gv('sp500'), dow_c:gv('dow'), usvix_c:gv('usvix'), nk_c:gv('nk'), hsi_c:gv('hsi'),
     crude_c:gv('crude'), gold_c:gv('gold'), inr_c:gv('inr'), yld_c:gv('yld'),
     gift_now:gv('gift_now'), nifty_prev:gv('nifty_prev'), gift_6am:gv('gift_6am'),
-    india_vix:gv('india_vix'), fii:gv('fii'), pcr:gv('pcr'),
+    india_vix:gv('india_vix'), fii:gv('fii'),
+    // v1.4.0: dual PCR — average used for score
+    pcr_nf:gv('pcr_nf'), pcr_bn:gv('pcr_bn'),
     max_pain_nf:gv('max_pain_nf'), n50adv:gv('n50adv'), n50dma:gv('n50dma'), bnfadv:gv('bnfadv'),
     close_char:gvi('close_char')||0,
   };
 
-  // Previous close from Smarts (evening data)
-  function getEvening(key){ try{ const d=JSON.parse(localStorage.getItem('mr130-evening')||'{}'); return d[key]||null; }catch{ return null; } }
+  // Average of NF + BNF PCR for breadth scoring
+  const pcrAvg = (valid(ev.pcr_nf) && valid(ev.pcr_bn)) ? (ev.pcr_nf + ev.pcr_bn) / 2
+               : valid(ev.pcr_nf) ? ev.pcr_nf
+               : valid(ev.pcr_bn) ? ev.pcr_bn : null;
+
+  function getEvening(key){ try{ const d=JSON.parse(localStorage.getItem('mr140-evening')||'{}'); return d[key]||null; }catch{ return null; } }
   const sp500_p=getEvening('ev_sp500'), dow_p=getEvening('ev_dow'), usvix_p=getEvening('ev_usvix'),
         nk_p=getEvening('ev_nk'), hsi_p=getEvening('ev_hsi'), crude_p=getEvening('ev_crude'),
         gold_p=getEvening('ev_gold'), inr_p=getEvening('ev_inr');
@@ -1033,13 +1186,12 @@ function calcScore(){
 
   function addParam(key, rawScore, sigLabel, wt){
     if(rawScore===null){ contributions.push({key, s:null, sig:sigLabel, wt, skipped:true}); return; }
-    const contrib=rawScore*(wt/2); // normalise: score range ±2, so divide by 2 for ±1 contribution
+    const contrib=rawScore*(wt/2);
     sc+=contrib; usedW+=wt;
     if(rawScore>0) bull++; else if(rawScore<0) bear++; else neut++;
     contributions.push({key, s:rawScore, contrib, sig:sigLabel, wt});
   }
 
-  // GIFT gap & trend
   const gapPct = (valid(ev.gift_now)&&valid(ev.nifty_prev)) ? pct(ev.gift_now,ev.nifty_prev) : null;
   const trendPts= (valid(ev.gift_now)&&valid(ev.gift_6am)) ? ev.gift_now-ev.gift_6am : null;
   addParam('gift_gap',   gapPct!==null?scoreParam('gift_gap',gapPct):null,
@@ -1047,7 +1199,6 @@ function calcScore(){
   addParam('gift_trend', trendPts!==null?scoreParam('gift_trend',trendPts):null,
            trendPts!==null?`${trendPts>=0?'+':''}${trendPts.toFixed(0)}pts`:'—', W.gift_trend);
 
-  // Global indices — use evening as prev, or skip pct if no prev
   const mkts=[
     {key:'sp500',c:ev.sp500_c,p:sp500_p,fn:'sp500'},
     {key:'dow',  c:ev.dow_c,  p:dow_p,  fn:'dow'},
@@ -1060,17 +1211,13 @@ function calcScore(){
   mkts.forEach(({key,c,p,fn})=>{
     if(!valid(c)){ addParam(key,null,'—',W[key]); return; }
     const changePct=valid(p)?pct(c,p):null;
-    // If no previous, use today's absolute level for VIX-style scoring else neutral
-    if(changePct===null){ addParam(key,0,`${c}`+' (no prev)',W[key]); return; }
-    const s=scoreParam(fn,changePct);
-    addParam(key,s,`${changePct>=0?'+':''}${changePct.toFixed(2)}%`,W[key]);
+    if(changePct===null){ addParam(key,0,`${c} (no prev)`,W[key]); return; }
+    addParam(key,scoreParam(fn,changePct),`${changePct>=0?'+':''}${changePct.toFixed(2)}%`,W[key]);
   });
 
-  // US VIX — score on absolute level
   if(valid(ev.usvix_c)){ addParam('usvix',scoreParam('usvix',ev.usvix_c),`VIX ${ev.usvix_c}`,W.usvix); }
   else addParam('usvix',null,'—',W.usvix);
 
-  // Yield — pct change
   const yld_p=getEvening('ev_yld');
   if(valid(ev.yld_c)){
     const yPct=valid(yld_p)?pct(ev.yld_c,yld_p):null;
@@ -1078,24 +1225,24 @@ function calcScore(){
              yPct!==null?`${yPct>=0?'+':''}${yPct.toFixed(2)}%`:`${ev.yld_c}%`,W.yld);
   } else addParam('yld',null,'—',W.yld);
 
-  // FII
   if(ev.fii!==null) addParam('fii',scoreParam('fii',ev.fii),`₹${ev.fii>=0?'+':''}${Math.round(ev.fii)}Cr`,W.fii);
   else addParam('fii',null,'—',W.fii);
 
-  // PCR
-  if(valid(ev.pcr)) addParam('pcr',scoreParam('pcr',ev.pcr),`PCR ${ev.pcr.toFixed(2)}`,W.pcr);
-  else addParam('pcr',null,'—',W.pcr);
+  // v1.4.0: score uses average PCR
+  if(pcrAvg!==null){
+    const pcrLabel = (valid(ev.pcr_nf)&&valid(ev.pcr_bn))
+      ? `NF ${ev.pcr_nf.toFixed(2)} · BNF ${ev.pcr_bn.toFixed(2)} → Avg ${pcrAvg.toFixed(2)}`
+      : `PCR ${pcrAvg.toFixed(2)}`;
+    addParam('pcr',scoreParam('pcr',pcrAvg),pcrLabel,W.pcr);
+  } else addParam('pcr',null,'—',W.pcr);
 
-  // Max pain NF
   const nfSpot=ev.nifty_prev||ev.gift_now;
   if(valid(ev.max_pain_nf)&&valid(nfSpot))
     addParam('max_pain',scoreParam('max_pain',ev.max_pain_nf,nfSpot),`Pain ${ev.max_pain_nf.toLocaleString('en-IN')}`,W.max_pain);
   else addParam('max_pain',null,'—',W.max_pain);
 
-  // Close char (already int)
   addParam('close_char',ev.close_char,['Str↓↓','Mild↓','Neutral','Mild↑','Str↑↑'][ev.close_char+2],W.close_char);
 
-  // Breadth
   if(valid(ev.n50adv)) addParam('n50adv',scoreParam('n50adv',ev.n50adv),`${ev.n50adv}/50`,W.n50adv);
   else addParam('n50adv',null,'—',W.n50adv);
   if(valid(ev.n50dma))  addParam('n50dma',scoreParam('n50dma',ev.n50dma),`${ev.n50dma}%`,W.n50dma);
@@ -1103,14 +1250,10 @@ function calcScore(){
   if(valid(ev.bnfadv)) addParam('bnfadv',scoreParam('bnfadv',ev.bnfadv),`${ev.bnfadv}/14`,W.bnfadv);
   else addParam('bnfadv',null,'—',W.bnfadv);
 
-  // Normalise score by weights actually used
-  // Scale to -2..+2 range keeping proportional weights
   const totalUsableW = contributions.filter(c=>c.s!==null).reduce((a,c)=>a+c.wt,0);
   const finalScore = totalUsableW > 0 ? sc / totalUsableW : 0;
-
   SCORE = Math.round(finalScore*1000)/1000;
 
-  // BNF sector adjustment
   const rbi=document.querySelector('input[name="rbi"]:checked')?.value||'neutral';
   const liq=document.querySelector('input[name="liq"]:checked')?.value||'neutral';
   const news=document.querySelector('input[name="news"]:checked')?.value||'none';
@@ -1119,14 +1262,12 @@ function calcScore(){
   if(liq==='deficit') bnfAdj-=0.15; else if(liq==='surplus') bnfAdj+=0.1;
   if(news==='hdfc'||news==='icici') bnfAdj-=0.3; else if(news==='both') bnfAdj-=0.5;
 
-  // Direction
   if(SCORE>=1.2)      { DIRECTION='STRONGLY BULLISH'; }
   else if(SCORE>=0.4) { DIRECTION='MILDLY BULLISH'; }
   else if(SCORE>-0.4) { DIRECTION='NEUTRAL'; }
   else if(SCORE>-1.2) { DIRECTION='MILDLY BEARISH'; }
   else                { DIRECTION='STRONGLY BEARISH'; }
 
-  // Auto strategy
   const vix=ev.india_vix||14;
   if(SCORE>=0.4)      STRAT_AUTO='BULL PUT SPREAD';
   else if(SCORE<=-0.4)STRAT_AUTO='BEAR CALL SPREAD';
@@ -1150,9 +1291,8 @@ function renderVerdict(score, dir, bull, bear, neut, contribs, usedW, bnfAdj, ev
   const pct_used=Math.round(usedW*100);
   document.getElementById('v-conf').textContent=`${bull} bull · ${bear} bear · ${neut} neutral · ${pct_used}% data entered`;
 
-  // Score delta
   try{
-    const prev=JSON.parse(localStorage.getItem('mr130-prevscore')||'null');
+    const prev=JSON.parse(localStorage.getItem('mr140-prevscore')||'null');
     if(prev&&score!==null){
       const delta=score-prev.score;
       let dlbl;
@@ -1169,10 +1309,8 @@ function renderVerdict(score, dir, bull, bear, neut, contribs, usedW, bnfAdj, ev
     }
   }catch{}
 
-  // Best trade recommendation
   renderRecCard(score, dir, ev, vix, bnfAdj);
 
-  // Parameter rows
   const container=document.getElementById('param-rows');
   container.innerHTML='';
   contribs.forEach(c=>{
@@ -1180,7 +1318,7 @@ function renderVerdict(score, dir, bull, bear, neut, contribs, usedW, bnfAdj, ev
     row.className='vrow';
     const NAMES={gift_gap:'GIFT Gap',gift_trend:'GIFT Trend',sp500:'S&P 500',dow:'DOW',
       usvix:'US VIX',nk:'Nikkei',hsi:'Hang Seng',crude:'Brent Crude',gold:'Gold',
-      inr:'USD/INR',yld:'10Y Yield',fii:'FII Flow',pcr:'PCR',close_char:'Prev Close',
+      inr:'USD/INR',yld:'10Y Yield',fii:'FII Flow',pcr:'PCR (Avg)',close_char:'Prev Close',
       max_pain:'Max Pain NF',n50adv:'Nifty A/D',n50dma:'200-DMA',bnfadv:'BNF A/D'};
     const s=c.s;
     const tag=c.skipped?'<span class="tag fl">SKIP</span>':
@@ -1198,25 +1336,22 @@ function renderRecCard(score, dir, ev, vix, bnfAdj){
   const n50adv=ev.n50adv||25; const bnfadv=ev.bnfadv||7;
   const nfBreadth=n50adv/50*100; const bnfBreadth=bnfadv/14*100;
   const fii=ev.fii||0;
-
-  // BNF score adjusted for sector factors
   const bnfScore=bnfBreadth+bnfAdj*100-(fii<0?5:0);
   const nfScore=nfBreadth;
   const idx=bnfScore>nfScore?'BANK NIFTY':'NIFTY 50';
   const idxCol=idx==='BANK NIFTY'?'var(--tl)':'var(--gn)';
   const strategy=STRAT_AUTO;
-
-  // Warning for heavyweight events
   const news=document.querySelector('input[name="news"]:checked')?.value||'none';
   const warning=news==='both'?'⚠️ Both HDFC+ICICI event — consider SKIP on BNF':
                 news!=='none'?`⚠️ ${news.toUpperCase()} event today — BNF volatile`:'';
-
   const reasons=[];
   if(bnfScore>nfScore) reasons.push(`BNF breadth ${bnfadv}/14 (${bnfBreadth.toFixed(0)}%) > NF ${n50adv}/50 (${nfBreadth.toFixed(0)}%)`);
   else reasons.push(`NF breadth ${n50adv}/50 (${nfBreadth.toFixed(0)}%) selected`);
   if(fii<0) reasons.push(`FII selling ₹${Math.abs(fii)}Cr — cautious`);
+  // v1.4.0: show individual PCRs in rec card
+  const pcrNF=ev.pcr_nf, pcrBN=ev.pcr_bn;
+  if(pcrNF||pcrBN) reasons.push(`PCR — NF: ${pcrNF?pcrNF.toFixed(2):'—'} · BNF: ${pcrBN?pcrBN.toFixed(2):'—'}`);
   reasons.push(`Strategy: ${strategy} (score ${score>=0?'+':''}${score.toFixed(2)}, VIX ${vix})`);
-
   el.style.background='var(--bg2)';
   el.style.border=`1px solid ${idxCol}33`;
   el.innerHTML=`
@@ -1230,11 +1365,10 @@ function renderRecCard(score, dir, ev, vix, bnfAdj){
 // ── Breadth renderer ───────────────────────────────────────────
 function renderBreadth(){
   const n50=gv('n50adv'), dma=gv('n50dma'), bnf=gv('bnfadv');
-
   if(valid(n50)){
-    const pct=n50/50*100;
-    document.getElementById('nf-adv-bar').style.width=pct+'%';
-    document.getElementById('nf-adv-bar').style.background=pct>=60?'var(--gn)':pct>=40?'var(--am)':'var(--rd)';
+    const p=n50/50*100;
+    document.getElementById('nf-adv-bar').style.width=p+'%';
+    document.getElementById('nf-adv-bar').style.background=p>=60?'var(--gn)':p>=40?'var(--am)':'var(--rd)';
     document.getElementById('nf-adv-num').textContent=Math.round(n50);
     document.getElementById('nf-dec-num').textContent=Math.round(50-n50);
     const lbl=n50>=40?'VERY BROAD':n50>=30?'BROAD':n50>=20?'MIXED':n50>=12?'NARROW':'HOLLOW';
@@ -1244,9 +1378,9 @@ function renderBreadth(){
   }
   if(valid(dma)) document.getElementById('nf-dma-pct').textContent=Math.round(dma);
   if(valid(bnf)){
-    const pct=bnf/14*100;
-    document.getElementById('bnf-adv-bar').style.width=pct+'%';
-    document.getElementById('bnf-adv-bar').style.background=pct>=60?'var(--gn)':pct>=40?'var(--am)':'var(--rd)';
+    const p=bnf/14*100;
+    document.getElementById('bnf-adv-bar').style.width=p+'%';
+    document.getElementById('bnf-adv-bar').style.background=p>=60?'var(--gn)':p>=40?'var(--am)':'var(--rd)';
     document.getElementById('bnf-adv-num').textContent=Math.round(bnf);
     document.getElementById('bnf-dec-num').textContent=Math.round(14-bnf);
     const lbl=bnf>=12?'VERY BROAD':bnf>=8?'BROAD':bnf>=6?'SPLIT':bnf>=4?'NARROW':'HOLLOW';
@@ -1254,8 +1388,6 @@ function renderBreadth(){
     document.getElementById('bnf-adv-tag').textContent=lbl;
     document.getElementById('bnf-adv-tag').style.color=col;
   }
-
-  // Position sizing
   const n50s=valid(n50)?n50>=30?2:n50>=20?1:n50>=12?0:-1:-99;
   const bnfs=valid(bnf)?bnf>=8?2:bnf>=6?1:bnf>=4?0:-1:-99;
   const avg=(n50s!==-99&&bnfs!==-99)?(n50s+bnfs)/2:n50s!==-99?n50s:bnfs;
@@ -1270,13 +1402,89 @@ function renderBreadth(){
   if(pb){pb.textContent=msg||'Enter breadth data above';pb.style.color=col;}
 }
 
-// ── Strategy engine ────────────────────────────────────────────
-function estimateCredit(width, dte, vix){
-  const dm=dte<=3?0.70:dte<=7?0.85:dte<=14?1.00:dte<=21?1.20:dte<=35?1.45:1.70;
-  const vm=vix<12?0.55:vix<14?0.78:vix<16?1.0:vix<18?1.22:1.45;
-  const p=Math.min(0.65, 0.38*dm*vm);
-  const mid=r5(width*p);
-  return {min:r5(mid*0.80), mid, max:r5(mid*1.22), pct:Math.round(p*100)};
+// ═══════════════════════════════════════════════════════════════
+// v1.4.0 STRATEGY ENGINE
+// 9-tier DTE multiplier · Dual PCR strike adjustment
+// NSE Holiday calendar · All 4 bugs fixed
+// ═══════════════════════════════════════════════════════════════
+
+// ── 9-tier DTE multiplier (calibrated to real premiums) ────────
+function getDteMult(dte) {
+  if (dte <= 3)  return 0.53;
+  if (dte <= 5)  return 0.86;
+  if (dte <= 7)  return 1.12;
+  if (dte <= 14) return 1.51;
+  if (dte <= 21) return 2.04;
+  if (dte <= 30) return 2.50;
+  if (dte <= 45) return 3.09;
+  if (dte <= 65) return 4.41;
+  return 5.26;
+}
+
+function getVixMult(vix) {
+  if (vix < 12) return 0.55;
+  if (vix < 14) return 0.78;
+  if (vix < 16) return 1.00;
+  if (vix < 18) return 1.22;
+  return 1.45;
+}
+
+// FIX 1: Cap credit at 68% of width — prevents negative R:R
+function estimateCredit(width, dte, vix) {
+  const raw = r5(width * 0.38 * getDteMult(dte) * getVixMult(vix));
+  const maxAllowed = r5(width * 0.68);      // hard cap — credit never exceeds 68% of spread
+  const mid = Math.min(raw, maxAllowed);
+  return { min: r5(mid * 0.80), mid, max: r5(mid * 1.22) };
+}
+
+function distFactor(distAtr) {
+  if (distAtr <= 1.0) return 1.15;
+  if (distAtr <= 1.5) return 1.00;
+  if (distAtr <= 2.0) return 0.82;
+  return 0.65;
+}
+
+// FIX 2: PCR adjustment scoped to DTE ≤ 30 only
+function pcrPutAdj(pcr, dte) {
+  if (!pcr || dte > 30) return 0.0;   // far expiry — no PCR adjustment
+  if (pcr >= 1.5) return -0.15;
+  if (pcr >= 1.2) return -0.10;
+  if (pcr >= 1.0) return  0.00;
+  if (pcr >= 0.8) return +0.10;
+  return +0.20;
+}
+
+function pcrCallAdj(pcr, dte) {
+  if (!pcr || dte > 30) return 0.0;
+  if (pcr >= 1.5) return +0.10;
+  if (pcr >= 1.2) return +0.05;
+  if (pcr >= 1.0) return  0.00;
+  if (pcr >= 0.8) return -0.10;
+  return -0.20;
+}
+
+function pcrPremAdj(pcr, dte) {
+  if (!pcr || dte > 30) return 1.0;   // no premium adjustment for far expiry
+  if (pcr >= 1.5) return 1.12;
+  if (pcr >= 1.2) return 1.06;
+  if (pcr >= 1.0) return 1.00;
+  if (pcr >= 0.8) return 0.94;
+  return 0.88;
+}
+
+// FIX 3: Win probability scales with actual ATR distance
+function winProb(dte, distAtr) {
+  const dm = dte<=3?1.05 : dte<=7?1.0 : dte<=14?0.95 : dte<=21?0.92 : 0.88;
+  const fm = distAtr>=2.5?1.15 : distAtr>=2.0?1.10 : distAtr>=1.5?1.02 : distAtr>=1.0?0.88 : 0.72;
+  return Math.min(92, Math.max(48, Math.round(72 * dm * fm)));
+}
+
+function starRating(rr, wp) {
+  if (rr <= 1.5 && wp >= 72) return 5;
+  if (rr <= 2.0 && wp >= 65) return 4;
+  if (rr <= 3.0)              return 3;
+  if (rr <= 4.0)              return 2;
+  return 1;
 }
 
 function estimateStraddle(price, dte, vix){
@@ -1285,267 +1493,159 @@ function estimateStraddle(price, dte, vix){
   return {unit, min:r5(unit*0.82), max:r5(unit*1.18)};
 }
 
-function winProb(dte, distMult, vix){
-  const d=dte<=3?1.05:dte<=7?1.0:dte<=14?0.95:dte<=21?0.92:0.88;
-  const f=distMult>=2?1.1:distMult>=1.5?1.0:0.88;
-  return Math.min(92,Math.max(48,Math.round(0.72*d*f*100)));
-}
-
-function starRating(rr, wp){
-  if(rr<=1.5&&wp>=72) return 5;
-  if(rr<=2.0&&wp>=65) return 4;
-  if(rr<=3.0)          return 3;
-  if(rr<=4.0)          return 2;
-  return 1;
-}
-
-function buildStrikeCard(title, tag, sell, buy, width, lot, lots, dte, vix, price, atr, col){
-  const distMult=(sell&&price)?Math.abs(sell-price)/atr:1.5;
-  const distF=distMult<=1.0?1.15:distMult<=1.5?1.0:distMult<=2.0?0.82:0.65;
-  const cr=estimateCredit(width,dte,vix);
-  const adjMid=r5(cr.mid*distF), adjMin=r5(adjMid*0.80), adjMax=r5(adjMid*1.22);
-  const mp=adjMid*lot*lots, ml=(width-adjMid)*lot*lots;
-  const rr=adjMid>0?(width-adjMid)/adjMid:99;
-  const wp=winProb(dte,distMult,vix);
-  const st=starRating(rr,wp);
-  const exit40=Math.round(mp*0.4);
-  const warnITM=sell&&price&&sell<price?`<div style="font-size:9px;color:var(--rd);margin-bottom:6px">⚠️ Sell strike below price — ITM, very high risk</div>`:'';
-  const warnClose=distMult<0.5?`<div style="font-size:9px;color:var(--am);margin-bottom:6px">⚠️ Only ${distMult.toFixed(1)}× ATR — very close</div>`:'';
-  return `
-  <div class="strike-card">
-    <div class="sc-hdr" style="border-left:3px solid ${col}">
-      <div>
-        <div class="sc-title" style="color:${col}">${title}</div>
-        <div class="sc-sub">${tag}</div>
-      </div>
-      <div style="margin-left:auto;font-size:14px">${'⭐'.repeat(st)}${'☆'.repeat(5-st)}</div>
-    </div>
-    <div class="sc-body">
-      ${warnITM}${warnClose}
-      <div class="sc-grid">
-        <div class="sc-item"><div class="sc-lbl">SELL STRIKE</div><div class="sc-val" style="color:${col}">${sell?sell.toLocaleString('en-IN'):'—'}</div></div>
-        <div class="sc-item"><div class="sc-lbl">BUY STRIKE</div><div class="sc-val" style="color:${col}">${buy?buy.toLocaleString('en-IN'):'—'}</div></div>
-        <div class="sc-item"><div class="sc-lbl">CREDIT/UNIT</div><div class="sc-val gn">₹${adjMin}–${adjMax}</div></div>
-        <div class="sc-item"><div class="sc-lbl">LOT CREDIT</div><div class="sc-val gn">₹${fi(adjMid*lot*lots)}</div></div>
-        <div class="sc-item"><div class="sc-lbl">MAX PROFIT</div><div class="sc-val gn">${fr(mp)}</div></div>
-        <div class="sc-item"><div class="sc-lbl">MAX LOSS</div><div class="sc-val rd">${fr(ml)}</div></div>
-        <div class="sc-item"><div class="sc-lbl">RISK:REWARD</div><div class="sc-val am">${rr.toFixed(2)}:1</div></div>
-        <div class="sc-item"><div class="sc-lbl">WIN PROB</div><div class="sc-val am">${wp}%</div></div>
-      </div>
-      <div class="sc-exit">
-        <div class="sc-exit-item">
-          <div class="sc-exit-lbl">✅ EXIT AT PROFIT</div>
-          <div class="sc-exit-val" style="color:var(--gn)">${fr(exit40)}</div>
-        </div>
-        <div class="sc-exit-item">
-          <div class="sc-exit-lbl">🛑 STOP LOSS</div>
-          <div class="sc-exit-val" style="color:var(--rd)">${fr(exit40*2)}</div>
-        </div>
-      </div>
-    </div>
-  </div>`;
-}
-
-function buildStraddleCard(price, lot, lots, dte, vix){
-  const sd=estimateStraddle(price,dte,vix);
-  const atm=r5(price);
-  const totalCost=sd.unit*lot*lots;
-  const beu=atm+sd.unit, bed=atm-sd.unit;
-  return `
-  <div class="strike-card">
-    <div class="sc-hdr" style="border-left:3px solid var(--pu)">
-      <div>
-        <div class="sc-title" style="color:var(--pu)">LONG STRADDLE</div>
-        <div class="sc-sub">Buy ${atm.toLocaleString('en-IN')} CE + ${atm.toLocaleString('en-IN')} PE (ATM)</div>
-      </div>
-    </div>
-    <div class="sc-body">
-      <div class="sc-grid">
-        <div class="sc-item"><div class="sc-lbl">ATM STRIKE</div><div class="sc-val tl">${atm.toLocaleString('en-IN')}</div></div>
-        <div class="sc-item"><div class="sc-lbl">COST/UNIT</div><div class="sc-val am">₹${sd.min}–${sd.max}</div></div>
-        <div class="sc-item"><div class="sc-lbl">TOTAL COST</div><div class="sc-val am">${fr(totalCost)}</div></div>
-        <div class="sc-item"><div class="sc-lbl">MAX LOSS</div><div class="sc-val rd">${fr(totalCost)}</div></div>
-        <div class="sc-item"><div class="sc-lbl">UPPER BEP</div><div class="sc-val gn">${beu.toLocaleString('en-IN')}</div></div>
-        <div class="sc-item"><div class="sc-lbl">LOWER BEP</div><div class="sc-val gn">${bed.toLocaleString('en-IN')}</div></div>
-      </div>
-      <div class="sc-meta">Exit on any strong directional move · SL: ${fr(Math.round(totalCost*0.4))} (40% of cost) · Don't hold to expiry</div>
-      ${SCORE&&SCORE>0.1?`<div style="font-size:9px;color:var(--gn);margin-top:6px">📊 Bullish edge (${SCORE>0?'+':''}${SCORE?.toFixed(2)}) — CE leg likely gains faster</div>`:''}
-    </div>
-  </div>`;
-}
-
-
-// ═══════════════════════════════════════════════════════════════
-// MULTI-EXPIRY STRATEGY ENGINE v1.3.2
-// Auto-generates expiry dates. Shows 3+ expiries per index.
-// Both call + put side always shown. Verdict drives PRIMARY label.
-// ═══════════════════════════════════════════════════════════════
-
-// ── Expiry calendar auto-generator ────────────────────────────
+// ── Expiry calendar with NSE holiday fallback ──────────────────
 function getExpiries(idx){
   const isNF = idx==='NF';
   const today = new Date();
   today.setHours(0,0,0,0);
   const expiries = [];
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function fmt(d){ return String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()]; }
 
   if(isNF){
-    // NF: every Tuesday (weekly). Generate next 5.
-    const d = new Date(today); d.setDate(d.getDate()+1);
+    // NF: weekly every Tuesday with holiday fallback
+    const d = new Date(today);
+    d.setDate(d.getDate()+1);
     while(expiries.length < 5){
-      if(d.getDay()===2){ // Tuesday
-        const dte = Math.round((d-today)/86400000);
-        expiries.push({label:fmtDate(d), dte, type:'Weekly', d:new Date(d)});
+      if(d.getDay()===2){
+        const { d: actD, shifted } = actualExpiry(new Date(d));
+        if(actD > today){
+          const dte = Math.round((actD-today)/86400000);
+          expiries.push({ label:fmt(actD), dte, type:'Weekly', shifted, d:new Date(actD) });
+        }
       }
       d.setDate(d.getDate()+1);
     }
   } else {
-    // BNF: last Tuesday of each month. Generate next 4.
+    // BNF: last Tuesday of each month with holiday fallback
     let year=today.getFullYear(), month=today.getMonth();
     let found=0;
     while(found<4){
-      const lastTue = lastTuesdayOfMonth(year, month);
-      if(lastTue > today){
-        const dte = Math.round((lastTue-today)/86400000);
-        expiries.push({label:fmtDate(lastTue), dte, type:'Monthly', d:new Date(lastTue)});
+      const last = new Date(year, month+1, 0);
+      while(last.getDay()!==2) last.setDate(last.getDate()-1);
+      const { d: actD, shifted } = actualExpiry(new Date(last));
+      if(actD > today){
+        const dte = Math.round((actD-today)/86400000);
+        expiries.push({ label:fmt(actD), dte, type:'Monthly', shifted, d:new Date(actD) });
         found++;
       }
       month++;
       if(month>11){month=0; year++;}
+      if(year>2026) break; // safety
     }
   }
   return expiries;
 }
 
-function lastTuesdayOfMonth(year, month){
-  // Last Tuesday (day 2) of given year/month
-  const last = new Date(year, month+1, 0); // last day of month
-  while(last.getDay()!==2) last.setDate(last.getDate()-1);
-  return last;
-}
-
-function fmtDate(d){
-  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()];
-}
-
-// ── DTE-based conviction label ─────────────────────────────────
-function dteConviction(dte, score){
-  // Near-term: higher conviction but less time if wrong
-  // Far-term: lower risk per day, more time for credit to decay
+// ── DTE conviction label ───────────────────────────────────────
+function dteConviction(dte){
   if(dte<=7)  return {label:'⚡ Near-term', note:'Max theta decay. Enter only if direction clear. Exit by day 2.', cls:'near'};
   if(dte<=21) return {label:'⭐ Optimal',   note:'Best balance of credit and time buffer. Recommended window.', cls:'opt'};
   if(dte<=45) return {label:'📅 Mid-term',  note:'Rich premium. Good for Iron Condor. More time to manage.', cls:'mid'};
   return      {label:'🗓️ Far-term',         note:'Very rich premium. Wide OI walls. Lower daily theta decay.', cls:'far'};
 }
 
-// ── Best strike selector per expiry ───────────────────────────
-function bestStrike(price, atr, dte, vix, isBearSide, oiWall){
-  // Returns the single best strike recommendation for this expiry/side
-  const stdMult = dte<=7 ? 2.0 : dte<=21 ? 1.5 : dte<=45 ? 1.3 : 1.2;
-  const stdStrike = isBearSide ? r5(price+atr*stdMult) : r5(price-atr*stdMult);
+// FIX 4: Best strike uses per-index PCR
+function bestStrike(price, atr, dte, vix, isBearSide, oiWall, pcr, isNF){
+  const tick = isNF ? 5 : 100;
+  const round = isNF ? r5 : r100;
+  const baseMult = dte<=7?2.0 : dte<=21?1.5 : dte<=45?1.3 : 1.2;
+  const pcrAdj   = isBearSide ? pcrCallAdj(pcr, dte) : pcrPutAdj(pcr, dte);
+  const mult     = baseMult + pcrAdj;
+  const stdStrike = round(isBearSide ? price+atr*mult : price-atr*mult);
 
-  if(!oiWall) return {strike:stdStrike, reason:`${stdMult}×ATR (${stdMult===2?'safety margin for near expiry':'standard buffer'})`, isOI:false};
+  if(!oiWall) return {strike:stdStrike, reason:`${mult.toFixed(2)}×ATR${dte>30?' (std, no PCR adj)':' (PCR adj)'}`, isOI:false, mult};
 
-  // Compare OI wall vs ATR
   const oiDist = Math.abs(oiWall-price)/atr;
-  const stdDist = Math.abs(stdStrike-price)/atr;
-
-  // OI wall is better if: beyond ATR buffer AND provides decent credit
   if(isBearSide){
-    if(oiWall>stdStrike && oiDist>=1.0){
-      return {strike:r5(oiWall), reason:`OI call wall at ${r5(oiWall).toLocaleString('en-IN')} (${oiDist.toFixed(1)}×ATR from price)`, isOI:true};
-    }
-    // OI wall too close — use ATR but flag it
-    if(oiWall<=price) return {strike:stdStrike, reason:`OI wall below price — using ATR ${stdMult}×`, isOI:false};
-    return {strike:stdStrike, reason:`ATR ${stdMult}× buffer safer than OI wall (${oiDist.toFixed(1)}×ATR)`, isOI:false};
+    if(oiWall>stdStrike && oiDist>=1.0)
+      return {strike:round(oiWall), reason:`OI call wall at ${round(oiWall).toLocaleString('en-IN')} (${oiDist.toFixed(1)}×ATR)`, isOI:true, mult:oiDist};
+    return {strike:stdStrike, reason:`ATR ${mult.toFixed(2)}× safer than OI wall`, isOI:false, mult};
   } else {
-    if(oiWall<stdStrike && oiDist>=1.0){
-      return {strike:r5(oiWall), reason:`OI put wall at ${r5(oiWall).toLocaleString('en-IN')} (${oiDist.toFixed(1)}×ATR from price)`, isOI:true};
-    }
-    return {strike:stdStrike, reason:`ATR ${stdMult}× buffer`, isOI:false};
+    if(oiWall<stdStrike && oiDist>=1.0)
+      return {strike:round(oiWall), reason:`OI put wall at ${round(oiWall).toLocaleString('en-IN')} (${oiDist.toFixed(1)}×ATR)`, isOI:true, mult:oiDist};
+    return {strike:stdStrike, reason:`ATR ${mult.toFixed(2)}× buffer`, isOI:false, mult};
   }
 }
 
-// ── Per-expiry strategy card ───────────────────────────────────
-function buildExpiryCard(expiry, price, atr, lot, lots, vix, width, score, oiCall, oiPut, idx){
-  const {label, dte, type} = expiry;
-  const conv = dteConviction(dte, score);
+// ── Per-expiry card builder ────────────────────────────────────
+function buildExpiryCard(expiry, price, atr, lot, lots, vix, width, score, oiCall, oiPut, idx, pcr){
+  const {label, dte, type, shifted} = expiry;
+  const conv  = dteConviction(dte);
+  const isNF  = idx==='NF';
   const isBull=score>=0.4, isBear=score<=-0.4, isNeutral=!isBull&&!isBear;
 
-  // Best strikes for this expiry
-  const callBest = bestStrike(price, atr, dte, vix, true,  oiCall);
-  const putBest  = bestStrike(price, atr, dte, vix, false, oiPut);
+  const callBest = bestStrike(price, atr, dte, vix, true,  oiCall, pcr, isNF);
+  const putBest  = bestStrike(price, atr, dte, vix, false, oiPut,  pcr, isNF);
   const callBuy  = callBest.strike + width;
   const putBuy   = putBest.strike  - width;
 
-  // Credit estimates
-  const callDist = Math.abs(callBest.strike-price)/atr;
-  const putDist  = Math.abs(putBest.strike-price)/atr;
-  const callF    = callDist<=1.0?1.15:callDist<=1.5?1.0:callDist<=2.0?0.82:0.65;
-  const putF     = putDist <=1.0?1.15:putDist <=1.5?1.0:putDist <=2.0?0.82:0.65;
+  const callDist = (callBest.strike-price)/atr;
+  const putDist  = (price-putBest.strike)/atr;
+  const pa       = pcrPremAdj(pcr, dte);
 
-  const callCrBase = estimateCredit(width, dte, vix);
-  const putCrBase  = estimateCredit(width, dte, vix);
-  const callMid = r5(callCrBase.mid*callF), callMin=r5(callMid*0.80), callMax=r5(callMid*1.22);
-  const putMid  = r5(putCrBase.mid*putF),  putMin =r5(putMid*0.80),  putMax =r5(putMid*1.22);
+  const crBase  = estimateCredit(width, dte, vix);
+  // FIX 1 applied in estimateCredit — credit already capped
+  const callMid = Math.min(r5(crBase.mid * distFactor(callDist) / Math.max(pa,1)), r5(width*0.68));
+  const putMid  = Math.min(r5(crBase.mid * distFactor(putDist)  * pa),              r5(width*0.68));
+  const callMin = r5(callMid*0.80), callMax = r5(callMid*1.22);
+  const putMin  = r5(putMid*0.80),  putMax  = r5(putMid*1.22);
 
-  const callMaxP = callMid*lot*lots,  callMaxL = (width-callMid)*lot*lots;
-  const putMaxP  = putMid*lot*lots,   putMaxL  = (width-putMid)*lot*lots;
-  const callRR   = callMid>0?(width-callMid)/callMid:99;
-  const putRR    = putMid>0?(width-putMid)/putMid:99;
-  const callWP   = winProb(dte, callDist, vix);
-  const putWP    = winProb(dte, putDist, vix);
-  const callSt   = starRating(callRR, callWP);
-  const putSt    = starRating(putRR,  putWP);
+  const callMaxP = callMid*lot*lots, callMaxL = (width-callMid)*lot*lots;
+  const putMaxP  = putMid*lot*lots,  putMaxL  = (width-putMid)*lot*lots;
 
-  // Iron Condor combined
+  // FIX 1: R:R always valid since credit ≤ 68% of width
+  const callRR = callMid>0 ? (width-callMid)/callMid : 99;
+  const putRR  = putMid>0  ? (width-putMid)/putMid   : 99;
+
+  // FIX 3: Win prob uses actual distance
+  const callWP = winProb(dte, callDist);
+  const putWP  = winProb(dte, putDist);
+  const callSt = starRating(callRR, callWP);
+  const putSt  = starRating(putRR,  putWP);
+
   const icTotal = (callMid+putMid)*lot*lots;
   const icMaxL  = Math.max(callMaxL, putMaxL);
-
-  // Straddle
-  const sd = estimateStraddle(price, dte, vix);
+  const sd      = estimateStraddle(price, dte, vix);
   const sdTotal = sd.unit*lot*lots;
 
-  // Labels driven by verdict
-  const callPrimary  = isBear||isNeutral;
-  const putPrimary   = isBull||isNeutral;
-
-  // Conv badge color
-  const convColor = conv.cls==='near'?'var(--rd)':conv.cls==='opt'?'var(--gn)':conv.cls==='mid'?'var(--am)':'var(--tl)';
-  const f = n => n.toLocaleString('en-IN');
-  const fr = n => '₹'+f(Math.round(n));
+  const callPrimary = isBear||isNeutral;
+  const putPrimary  = isBull||isNeutral;
+  const convColor   = conv.cls==='near'?'var(--rd)':conv.cls==='opt'?'var(--gn)':conv.cls==='mid'?'var(--am)':'var(--tl)';
+  const f  = n => Math.round(n).toLocaleString('en-IN');
+  const fv = n => '₹'+f(n);
+  const shiftNote = shifted ? ` <span style="color:var(--am);font-size:7.5px">⚠️ Holiday shifted</span>` : '';
 
   return `
   <div class="expiry-card" id="ec-${idx}-${dte}">
-    <!-- Expiry header — click to expand/collapse -->
     <div class="ec-hdr" onclick="toggleExpiry('ec-${idx}-${dte}')">
       <div style="display:flex;align-items:center;gap:10px">
         <div>
-          <div style="font-size:14px;font-weight:800;color:var(--text);font-family:var(--font-mono)">${label}</div>
-          <div style="font-size:8px;color:var(--muted);margin-top:1px">${type} · ${dte} DTE</div>
+          <div style="font-size:14px;font-weight:800;color:var(--text);font-family:var(--font-mono)">${label}${shiftNote}</div>
+          <div style="font-size:8px;color:var(--muted);margin-top:1px">${type} · ${dte} DTE${pcr?` · PCR ${pcr.toFixed(2)}`:''}${dte>30?' · Std ATR (no PCR adj)':''}</div>
         </div>
         <span class="tag" style="background:${convColor}22;color:${convColor};border:1px solid ${convColor}44">${conv.label}</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <div style="text-align:right">
-          <div style="font-size:8px;color:var(--muted)">MAX CREDIT</div>
-          <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--gn)">${fr(icTotal)}</div>
+          <div style="font-size:8px;color:var(--muted)">IC CREDIT</div>
+          <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--gn)">${fv(icTotal)}</div>
         </div>
         <div class="ec-chevron">▼</div>
       </div>
     </div>
 
-    <!-- Expiry body — collapsible -->
     <div class="ec-body">
       <div class="ec-note">${conv.note}</div>
 
-      <!-- ── CALL SIDE ── -->
+      <!-- CALL SIDE -->
       <div class="ec-section-hdr">
         <div style="display:flex;align-items:center;gap:6px">
           <div style="width:3px;height:14px;background:var(--rd);border-radius:2px"></div>
           <div>
             <div style="font-size:9px;font-weight:700;color:var(--rd)">BEAR CALL SPREAD</div>
-            <div style="font-size:8px;color:var(--muted)">Sell ${callBest.strike.toLocaleString('en-IN')} CE / Buy ${callBuy.toLocaleString('en-IN')} CE</div>
+            <div style="font-size:8px;color:var(--muted)">Sell ${f(callBest.strike)} CE / Buy ${f(callBuy)} CE</div>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
@@ -1554,26 +1654,26 @@ function buildExpiryCard(expiry, price, atr, lot, lots, vix, width, score, oiCal
         </div>
       </div>
       <div style="font-size:8px;color:${callBest.isOI?'var(--am)':'var(--muted)'};padding:2px 14px 6px">
-        ${callBest.isOI?'🎯 ':''}${callBest.reason}
+        ${callBest.isOI?'🎯 ':''}${callBest.reason} · dist ${callDist.toFixed(2)}×ATR
       </div>
       <div class="mini-grid">
         <div class="mg-item"><div class="mg-lbl">CREDIT/UNIT</div><div class="mg-val gn">₹${callMin}–${callMax}</div></div>
-        <div class="mg-item"><div class="mg-lbl">MAX PROFIT</div><div class="mg-val gn">${fr(callMaxP)}</div></div>
-        <div class="mg-item"><div class="mg-lbl">MAX LOSS</div><div class="mg-val rd">${fr(callMaxL)}</div></div>
+        <div class="mg-item"><div class="mg-lbl">MAX PROFIT</div><div class="mg-val gn">${fv(callMaxP)}</div></div>
+        <div class="mg-item"><div class="mg-lbl">MAX LOSS</div><div class="mg-val rd">${fv(callMaxL)}</div></div>
         <div class="mg-item"><div class="mg-lbl">R:R · WIN%</div><div class="mg-val am">${callRR.toFixed(1)} · ${callWP}%</div></div>
       </div>
       <div class="exit-row">
-        <div class="exit-item"><span style="color:var(--gn)">✅ Exit</span> ${fr(callMaxP*0.4)}</div>
-        <div class="exit-item"><span style="color:var(--rd)">🛑 SL</span> ${fr(callMaxP*0.8)}</div>
+        <div class="exit-item"><span style="color:var(--gn)">✅ Exit</span> ${fv(callMaxP*0.4)}</div>
+        <div class="exit-item"><span style="color:var(--rd)">🛑 SL</span> ${fv(callMaxP*0.8)}</div>
       </div>
 
-      <!-- ── PUT SIDE ── -->
+      <!-- PUT SIDE -->
       <div class="ec-section-hdr" style="margin-top:10px">
         <div style="display:flex;align-items:center;gap:6px">
           <div style="width:3px;height:14px;background:var(--gn);border-radius:2px"></div>
           <div>
             <div style="font-size:9px;font-weight:700;color:var(--gn)">BULL PUT SPREAD</div>
-            <div style="font-size:8px;color:var(--muted)">Sell ${putBest.strike.toLocaleString('en-IN')} PE / Buy ${putBuy.toLocaleString('en-IN')} PE</div>
+            <div style="font-size:8px;color:var(--muted)">Sell ${f(putBest.strike)} PE / Buy ${f(putBuy)} PE</div>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
@@ -1582,40 +1682,40 @@ function buildExpiryCard(expiry, price, atr, lot, lots, vix, width, score, oiCal
         </div>
       </div>
       <div style="font-size:8px;color:${putBest.isOI?'var(--am)':'var(--muted)'};padding:2px 14px 6px">
-        ${putBest.isOI?'🎯 ':''}${putBest.reason}
+        ${putBest.isOI?'🎯 ':''}${putBest.reason} · dist ${putDist.toFixed(2)}×ATR
       </div>
       <div class="mini-grid">
         <div class="mg-item"><div class="mg-lbl">CREDIT/UNIT</div><div class="mg-val gn">₹${putMin}–${putMax}</div></div>
-        <div class="mg-item"><div class="mg-lbl">MAX PROFIT</div><div class="mg-val gn">${fr(putMaxP)}</div></div>
-        <div class="mg-item"><div class="mg-lbl">MAX LOSS</div><div class="mg-val rd">${fr(putMaxL)}</div></div>
+        <div class="mg-item"><div class="mg-lbl">MAX PROFIT</div><div class="mg-val gn">${fv(putMaxP)}</div></div>
+        <div class="mg-item"><div class="mg-lbl">MAX LOSS</div><div class="mg-val rd">${fv(putMaxL)}</div></div>
         <div class="mg-item"><div class="mg-lbl">R:R · WIN%</div><div class="mg-val am">${putRR.toFixed(1)} · ${putWP}%</div></div>
       </div>
       <div class="exit-row">
-        <div class="exit-item"><span style="color:var(--gn)">✅ Exit</span> ${fr(putMaxP*0.4)}</div>
-        <div class="exit-item"><span style="color:var(--rd)">🛑 SL</span> ${fr(putMaxP*0.8)}</div>
+        <div class="exit-item"><span style="color:var(--gn)">✅ Exit</span> ${fv(putMaxP*0.4)}</div>
+        <div class="exit-item"><span style="color:var(--rd)">🛑 SL</span> ${fv(putMaxP*0.8)}</div>
       </div>
 
-      <!-- ── IRON CONDOR ── -->
+      <!-- IRON CONDOR -->
       <div class="ec-section-hdr" style="margin-top:10px">
         <div style="display:flex;align-items:center;gap:6px">
           <div style="width:3px;height:14px;background:var(--am);border-radius:2px"></div>
           <div>
             <div style="font-size:9px;font-weight:700;color:var(--am)">IRON CONDOR (BOTH LEGS)</div>
-            <div style="font-size:8px;color:var(--muted)">${putBest.strike.toLocaleString('en-IN')}/${putBuy.toLocaleString('en-IN')} PE + ${callBest.strike.toLocaleString('en-IN')}/${callBuy.toLocaleString('en-IN')} CE</div>
+            <div style="font-size:8px;color:var(--muted)">${f(putBest.strike)}/${f(putBuy)} PE + ${f(callBest.strike)}/${f(callBuy)} CE</div>
           </div>
         </div>
         ${isNeutral?'<span class="tag am">✅ IDEAL</span>':''}
       </div>
       <div class="mini-grid">
-        <div class="mg-item"><div class="mg-lbl">TOTAL CREDIT</div><div class="mg-val gn">${fr(icTotal)}</div></div>
-        <div class="mg-item"><div class="mg-lbl">MAX LOSS</div><div class="mg-val rd">${fr(icMaxL)}</div></div>
-        <div class="mg-item"><div class="mg-lbl">EXIT PROFIT</div><div class="mg-val am">${fr(icTotal*0.40)}</div></div>
-        <div class="mg-item"><div class="mg-lbl">STOP LOSS</div><div class="mg-val am">${fr(icTotal*0.80)}</div></div>
+        <div class="mg-item"><div class="mg-lbl">TOTAL CREDIT</div><div class="mg-val gn">${fv(icTotal)}</div></div>
+        <div class="mg-item"><div class="mg-lbl">MAX LOSS</div><div class="mg-val rd">${fv(icMaxL)}</div></div>
+        <div class="mg-item"><div class="mg-lbl">EXIT PROFIT</div><div class="mg-val am">${fv(icTotal*0.40)}</div></div>
+        <div class="mg-item"><div class="mg-lbl">STOP LOSS</div><div class="mg-val am">${fv(icTotal*0.80)}</div></div>
       </div>
-      ${isBull?'<div class="ec-bias-note gn">📊 Bullish bias — put leg safer. Widen call leg slightly for extra buffer.</div>':isBear?'<div class="ec-bias-note rd">📊 Bearish bias — call leg safer. Widen put leg slightly for extra buffer.</div>':'<div class="ec-bias-note am">📊 Neutral — both legs equally valid for Iron Condor.</div>'}
+      ${isBull?'<div class="ec-bias-note gn">📊 Bullish bias — put leg safer. Widen call side for extra buffer.</div>':isBear?'<div class="ec-bias-note rd">📊 Bearish bias — call leg safer. Widen put side for extra buffer.</div>':'<div class="ec-bias-note am">📊 Neutral — both legs equally valid for Iron Condor.</div>'}
 
       ${(isNeutral && vix<16)?`
-      <!-- ── STRADDLE (neutral + cheap VIX) ── -->
+      <!-- STRADDLE (neutral + low VIX) -->
       <div class="ec-section-hdr" style="margin-top:10px">
         <div style="display:flex;align-items:center;gap:6px">
           <div style="width:3px;height:14px;background:var(--pu);border-radius:2px"></div>
@@ -1628,27 +1728,31 @@ function buildExpiryCard(expiry, price, atr, lot, lots, vix, width, score, oiCal
       </div>
       <div class="mini-grid">
         <div class="mg-item"><div class="mg-lbl">COST/UNIT</div><div class="mg-val am">₹${sd.min}–${sd.max}</div></div>
-        <div class="mg-item"><div class="mg-lbl">TOTAL COST</div><div class="mg-val am">${fr(sdTotal)}</div></div>
+        <div class="mg-item"><div class="mg-lbl">TOTAL COST</div><div class="mg-val am">${fv(sdTotal)}</div></div>
         <div class="mg-item"><div class="mg-lbl">BEP UP</div><div class="mg-val gn">${(r5(price)+sd.unit).toLocaleString('en-IN')}</div></div>
         <div class="mg-item"><div class="mg-lbl">BEP DOWN</div><div class="mg-val gn">${(r5(price)-sd.unit).toLocaleString('en-IN')}</div></div>
       </div>`:''}
 
-    </div><!-- /ec-body -->
-  </div><!-- /expiry-card -->`;
+    </div>
+  </div>`;
 }
 
 // ── Main multi-expiry builder ──────────────────────────────────
 function buildMultiExpiry(idx){
-  const isNF=idx==='NF';
-  const price   = gv(isNF?'nf_price':'bn_price');
-  const atr     = gv(isNF?'nf_atr':'bn_atr');
-  const lot     = gv(isNF?'nf_lot':'bn_lot');
-  const lots    = gv(isNF?'nf_lots':'bn_lots')||1;
-  const oiCall  = gv(isNF?'nf_oi_call':'bn_oi_call');
-  const oiPut   = gv(isNF?'nf_oi_put':'bn_oi_put');
-  const vix     = gv('india_vix')||14;
-  const score   = SCORE||0;
-  const out     = document.getElementById((isNF?'nf':'bn')+'-multi-output');
+  const isNF  = idx==='NF';
+  const price = gv(isNF?'nf_price':'bn_price');
+  const atr   = gv(isNF?'nf_atr':'bn_atr');
+  const lot   = gv(isNF?'nf_lot':'bn_lot');
+  const lots  = gv(isNF?'nf_lots':'bn_lots')||1;
+  const oiCall= gv(isNF?'nf_oi_call':'bn_oi_call');
+  const oiPut = gv(isNF?'nf_oi_put':'bn_oi_put');
+  const vix   = gv('india_vix')||14;
+  const score = SCORE||0;
+
+  // v1.4.0: use index-specific PCR
+  const pcr   = isNF ? gv('pcr_nf') : gv('pcr_bn');
+
+  const out = document.getElementById((isNF?'nf':'bn')+'-multi-output');
   if(!out) return;
 
   if(!price||!atr||!lot){
@@ -1657,54 +1761,44 @@ function buildMultiExpiry(idx){
   }
 
   const expiries = getExpiries(idx);
-  const width    = isNF?200:400;
+  const width    = isNF ? 200 : 400;
   const isBull=score>=0.4, isBear=score<=-0.4, isNeutral=!isBull&&!isBear;
   const dirColor=isBull?'var(--gn)':isBear?'var(--rd)':'var(--am)';
   const dirIcon=isBull?'🟢':isBear?'🔴':'🟡';
 
-  // Header verdict banner
   let html=`
-  <div style="margin:10px 14px 0;background:var(--bg3);border-radius:var(--r);
-    padding:10px 14px;border-left:3px solid ${dirColor}">
+  <div style="margin:10px 14px 0;background:var(--bg3);border-radius:var(--r);padding:10px 14px;border-left:3px solid ${dirColor}">
     <div style="font-size:8px;letter-spacing:1.5px;color:var(--muted);margin-bottom:3px">MARKET DIRECTION → AUTO STRATEGY</div>
     <div style="font-size:13px;font-weight:700;color:${dirColor}">${dirIcon} ${DIRECTION||'ENTER RADAR DATA'} (${score>=0?'+':''}${score.toFixed(2)})</div>
-    <div style="font-size:9px;color:var(--muted);margin-top:2px">${isNF?'Nifty 50':'Bank Nifty'} ${price.toLocaleString('en-IN')} · ATR ${atr} · VIX ${vix} · ${isNF?expiries.length+' weekly expiries':'monthly expiries'}</div>
-    ${oiCall||oiPut?`<div style="font-size:8.5px;color:var(--am);margin-top:3px">OI walls active — ${oiCall?'Call '+oiCall.toLocaleString('en-IN'):''}${oiCall&&oiPut?' · ':''}${oiPut?'Put '+oiPut.toLocaleString('en-IN'):''} → best strike auto-selected</div>`:''}
+    <div style="font-size:9px;color:var(--muted);margin-top:2px">${isNF?'Nifty 50':'Bank Nifty'} ${price.toLocaleString('en-IN')} · ATR ${atr} · VIX ${vix}${pcr?' · PCR '+pcr.toFixed(2):''}</div>
+    ${oiCall||oiPut?`<div style="font-size:8.5px;color:var(--am);margin-top:3px">OI walls active — ${oiCall?'Call '+oiCall.toLocaleString('en-IN'):''}${oiCall&&oiPut?' · ':''}${oiPut?'Put '+oiPut.toLocaleString('en-IN'):''}</div>`:''}
   </div>
-  <div style="font-size:8px;color:var(--muted);padding:8px 14px">Showing ${expiries.length} expiries · tap any card to expand · ✅ = verdict-recommended side</div>`;
+  <div style="font-size:8px;color:var(--muted);padding:8px 14px">Showing ${expiries.length} expiries · tap any card to expand · ✅ = verdict-recommended side · Holiday-adjusted dates</div>`;
 
-  // Generate expiry cards — first one open, rest collapsed
-  expiries.forEach((exp,i) => {
-    html += buildExpiryCard(exp, price, atr, lot, lots, vix, width, score, oiCall, oiPut, idx);
+  expiries.forEach(exp => {
+    html += buildExpiryCard(exp, price, atr, lot, lots, vix, width, score, oiCall, oiPut, idx, pcr);
   });
 
   out.innerHTML = html;
 
-  // Auto-open first expiry card
   setTimeout(()=>{
-    const first = document.querySelector(`#ec-${idx}-${expiries[0].dte}`);
+    const first = document.querySelector(`#ec-${idx}-${expiries[0]?.dte}`);
     if(first) first.classList.add('open');
   }, 50);
 }
 
-// ── Expiry card toggle ─────────────────────────────────────────
 function toggleExpiry(id){
   document.getElementById(id)?.classList.toggle('open');
 }
 
-// ── buildStrategy (kept for backward compat, calls multi) ──────
 function buildStrategy(idx){ buildMultiExpiry(idx); }
-
-// ── buildIronCondorCard (referenced in straddle fallback) ──────
-function buildIronCondorCard(){ return ''; }
-
 
 // ── Tab navigation ─────────────────────────────────────────────
 function go(n){
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('on',i===n));
   document.querySelectorAll('.panel').forEach((p,i)=>p.classList.toggle('on',i===n));
-  if(n===2){ calcScore(); }
-  if(n===3){ buildMultiExpiry('NF'); buildMultiExpiry('BN'); }
+  if(n===2) calcScore();
+  if(n===3){ buildMultiExpiry('NF'); buildMultiExpiry('BN'); updateEntrySignal(); }
   if(n===4) checkLocks();
 }
 
@@ -1716,13 +1810,13 @@ function switchStrat(n){
 // ── Save / Lock / Edit ─────────────────────────────────────────
 function saveRadar(){
   const radarFlds=['sp500','dow','usvix','nk','hsi','crude','gold','inr','yld',
-    'gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr',
+    'gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr_nf','pcr_bn',
     'max_pain_nf','max_pain_bn','close_char'];
   const data={};
   radarFlds.forEach(f=>{ const e=document.getElementById(f); if(e&&e.value!=='') data[f]=e.value; stampField(f); });
   try{
-    localStorage.setItem('mr130-radar',JSON.stringify(data));
-    localStorage.setItem('mr130-prevscore',JSON.stringify({score:SCORE,dir:DIRECTION,ts:Date.now()}));
+    localStorage.setItem('mr140-radar',JSON.stringify(data));
+    localStorage.setItem('mr140-prevscore',JSON.stringify({score:SCORE,dir:DIRECTION,ts:Date.now()}));
     RADAR_LOCKED=true;
     setDisabled(radarFlds,true);
     document.getElementById('btn-save-radar').style.display='none';
@@ -1735,7 +1829,7 @@ function saveRadar(){
 function editRadar(){
   RADAR_LOCKED=false;
   const radarFlds=['sp500','dow','usvix','nk','hsi','crude','gold','inr','yld',
-    'gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr',
+    'gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr_nf','pcr_bn',
     'max_pain_nf','max_pain_bn','close_char'];
   setDisabled(radarFlds,false);
   document.getElementById('btn-save-radar').style.display='inline-flex';
@@ -1749,7 +1843,7 @@ function saveBreadth(){
   const data={};
   flds.forEach(f=>{ const e=document.getElementById(f); if(e) data[f]=e.value; stampField(f); });
   try{
-    localStorage.setItem('mr130-breadth',JSON.stringify(data));
+    localStorage.setItem('mr140-breadth',JSON.stringify(data));
     BREADTH_LOCKED=true;
     setDisabled(flds,true);
     document.getElementById('btn-save-breadth').style.display='none';
@@ -1773,7 +1867,7 @@ function saveEvening(){
   const data={};
   flds.forEach(f=>{ const e=document.getElementById(f); if(e) data[f]=e.value; stampField(f); });
   try{
-    localStorage.setItem('mr130-evening',JSON.stringify(data));
+    localStorage.setItem('mr140-evening',JSON.stringify(data));
     EVENING_LOCKED=true;
     setDisabled(flds,true);
     document.getElementById('btn-save-evening').style.display='none';
@@ -1794,13 +1888,11 @@ function editEvening(){
   toast('✏️ Edit mode');
 }
 
-// ── BNF checklist ──────────────────────────────────────────────
 function saveChecklist(){
   const rbi=document.querySelector('input[name="rbi"]:checked')?.value||'neutral';
   const liq=document.querySelector('input[name="liq"]:checked')?.value||'neutral';
   const news=document.querySelector('input[name="news"]:checked')?.value||'none';
-  try{ localStorage.setItem('mr130-checklist',JSON.stringify({rbi,liq,news})); }catch{}
-  // Update radio visual
+  try{ localStorage.setItem('mr140-checklist',JSON.stringify({rbi,liq,news})); }catch{}
   ['hawkish','neutral','dovish'].forEach(v=>document.getElementById('rbi-'+v)?.classList.toggle('checked',v===rbi));
   ['deficit','neutral','surplus'].forEach(v=>document.getElementById('liq-'+v)?.classList.toggle('checked',v===liq));
   ['none','hdfc','icici','both'].forEach(v=>document.getElementById('news-'+v)?.classList.toggle('checked',v===news));
@@ -1808,45 +1900,44 @@ function saveChecklist(){
 
 function loadChecklist(){
   try{
-    const d=JSON.parse(localStorage.getItem('mr130-checklist')||'null');
+    const d=JSON.parse(localStorage.getItem('mr140-checklist')||'null');
     if(!d) return;
     const r=document.querySelector(`input[name="rbi"][value="${d.rbi}"]`);
     const l=document.querySelector(`input[name="liq"][value="${d.liq}"]`);
     const n=document.querySelector(`input[name="news"][value="${d.news}"]`);
-    if(r){ r.checked=true; } if(l){ l.checked=true; } if(n){ n.checked=true; }
-    saveChecklist(); // sync visual
+    if(r) r.checked=true; if(l) l.checked=true; if(n) n.checked=true;
+    saveChecklist();
   }catch{}
 }
 
 // ── State persistence ──────────────────────────────────────────
 function saveState(){
   const allFlds=['sp500','dow','usvix','nk','hsi','crude','gold','inr','yld',
-    'gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr',
+    'gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr_nf','pcr_bn',
     'max_pain_nf','max_pain_bn','close_char','n50adv','n50dma','bnfadv',
-    'nf_price','nf_atr','nf_lot','nf_lots','nf_dte','nf_oi_sell','nf_oi_buy','nf_put_wall',
-    'bn_price','bn_atr','bn_lot','bn_lots','bn_dte','bn_oi_sell','bn_oi_buy','bn_put_wall'];
+    'nf_price','nf_atr','nf_lot','nf_lots','nf_oi_call','nf_oi_put',
+    'bn_price','bn_atr','bn_lot','bn_lots','bn_oi_call','bn_oi_put'];
   const s={};
   allFlds.forEach(f=>{ const e=document.getElementById(f); if(e) s[f]=e.value; });
-  try{ localStorage.setItem('mr130-state',JSON.stringify(s)); }catch{}
+  try{ localStorage.setItem('mr140-state',JSON.stringify(s)); }catch{}
 }
 
 function loadState(){
   try{
-    const s=JSON.parse(localStorage.getItem('mr130-state')||'{}');
+    const s=JSON.parse(localStorage.getItem('mr140-state')||'{}');
     Object.keys(s).forEach(f=>{ const e=document.getElementById(f); if(e&&s[f]!=='undefined') e.value=s[f]; });
   }catch{}
-  // Restore lock states
-  const radar=localStorage.getItem('mr130-radar');
+  const radar=localStorage.getItem('mr140-radar');
   if(radar){
     RADAR_LOCKED=true;
     const radarFlds=['sp500','dow','usvix','nk','hsi','crude','gold','inr','yld',
-      'gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr','max_pain_nf','max_pain_bn','close_char'];
+      'gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr_nf','pcr_bn','max_pain_nf','max_pain_bn','close_char'];
     setDisabled(radarFlds,true);
     document.getElementById('btn-save-radar').style.display='none';
     document.getElementById('btn-edit-radar').style.display='inline-flex';
     document.getElementById('radar-status').textContent='Saved ✅ (from last session)';
   }
-  const breadth=localStorage.getItem('mr130-breadth');
+  const breadth=localStorage.getItem('mr140-breadth');
   if(breadth){
     BREADTH_LOCKED=true;
     setDisabled(['n50adv','n50dma','bnfadv'],true);
@@ -1862,11 +1953,8 @@ function toast(m){
   clearTimeout(_tt); _tt=setTimeout(()=>e.classList.remove('show'),2500);
 }
 
-// Auto-save on input
 document.addEventListener('input',()=>{ setTimeout(saveState,500); });
 
-
-// Service worker
 if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
 // ── Init ──────────────────────────────────────────────────────
@@ -1874,11 +1962,13 @@ loadState();
 loadChecklist();
 restoreTS();
 checkLocks();
-setInterval(checkLocks,60000);
+setInterval(checkLocks, 60000);       // time lock refresh
+setInterval(updateEntrySignal, 60000); // entry signal refresh every minute
 calcScore();
 renderBreadth();
 buildMultiExpiry('NF');
 buildMultiExpiry('BN');
+updateEntrySignal();
 </script>
 </body>
 </html>
