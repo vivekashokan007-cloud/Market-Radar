@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#0F1923">
+<meta name="theme-color" content="#F8F6F1">
 <title>Market Radar</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -19,28 +19,28 @@
    Monospace data, clean entry, no fetch cruft
 ═══════════════════════════════════════════ */
 :root{
-  --bg0:#0F1923;
-  --bg1:#161F2C;
-  --bg2:#1C2838;
-  --bg3:#243044;
-  --border:#2A3A50;
-  --border2:#344860;
-  --text:#E8EDF5;
-  --muted:#6B7FA0;
-  --dim:#3D5070;
-  --gn:#00C896;
-  --gn-bg:rgba(0,200,150,0.08);
-  --gn-br:rgba(0,200,150,0.25);
-  --rd:#FF4D6D;
-  --rd-bg:rgba(255,77,109,0.08);
-  --rd-br:rgba(255,77,109,0.25);
-  --am:#F5A623;
-  --am-bg:rgba(245,166,35,0.08);
-  --am-br:rgba(245,166,35,0.3);
-  --tl:#00B4D8;
-  --tl-bg:rgba(0,180,216,0.08);
-  --tl-br:rgba(0,180,216,0.25);
-  --pu:#A78BFA;
+  --bg0:#F8F6F1;
+  --bg1:#F0EDE6;
+  --bg2:#E8E4DC;
+  --bg3:#DDD9D0;
+  --border:#C2BDB4;
+  --border2:#ADA8A0;
+  --text:#1C1E26;
+  --muted:#5C6070;
+  --dim:#9A9690;
+  --gn:#007F5F;
+  --gn-bg:rgba(0,127,95,0.10);
+  --gn-br:rgba(0,127,95,0.32);
+  --rd:#C8213E;
+  --rd-bg:rgba(200,33,62,0.10);
+  --rd-br:rgba(200,33,62,0.32);
+  --am:#B06E00;
+  --am-bg:rgba(176,110,0,0.10);
+  --am-br:rgba(176,110,0,0.32);
+  --tl:#006E96;
+  --tl-bg:rgba(0,110,150,0.10);
+  --tl-br:rgba(0,110,150,0.32);
+  --pu:#5E3DB3;
   --r:8px;
   --font-mono:'Space Mono',monospace;
   --font-sans:'DM Sans',sans-serif;
@@ -89,7 +89,7 @@ nav::-webkit-scrollbar{display:none;}
 .iname{font-size:11px;font-weight:500;color:var(--text);line-height:1.3;}
 .isrc{font-size:8.5px;color:var(--muted);margin-top:1px;}
 .iright{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
-.inp{background:var(--bg2);border:1px solid var(--border);border-radius:6px;
+.inp{background:#DCE8FA;border:1px solid #A8BEE0;border-radius:6px;
   color:var(--text);font-family:var(--font-mono);font-size:12px;font-weight:700;
   padding:6px 10px;width:110px;text-align:right;outline:none;transition:border 0.15s;}
 .inp:focus{border-color:var(--tl);}
@@ -104,7 +104,7 @@ nav::-webkit-scrollbar{display:none;}
 .igrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);margin:8px 14px;}
 .igrid-item{background:var(--bg1);padding:8px 10px;display:flex;flex-direction:column;gap:3px;}
 .igrid-label{font-size:8px;font-weight:600;letter-spacing:1px;color:var(--muted);text-transform:uppercase;}
-.igrid-input{background:var(--bg2);border:1px solid var(--border);border-radius:5px;
+.igrid-input{background:#DCE8FA;border:1px solid #A8BEE0;border-radius:5px;
   color:var(--text);font-family:var(--font-mono);font-size:13px;font-weight:700;
   padding:5px 8px;width:100%;text-align:right;outline:none;transition:border 0.15s;}
 .igrid-input:focus{border-color:var(--tl);}
@@ -141,10 +141,10 @@ nav::-webkit-scrollbar{display:none;}
   font-size:10px;font-weight:700;letter-spacing:0.5px;padding:8px 14px;border-radius:6px;
   border:none;cursor:pointer;transition:all 0.15s;}
 .btn:active{transform:scale(0.97);}
-.btn-primary{background:var(--tl);color:#0F1923;}
-.btn-save{background:var(--gn);color:#0F1923;}
+.btn-primary{background:var(--tl);color:#FFFFFF;}
+.btn-save{background:var(--gn);color:#FFFFFF;}
 .btn-edit{background:var(--bg3);color:var(--am);border:1px solid var(--am-br);}
-.btn-lock{background:var(--pu);color:#0F1923;}
+.btn-lock{background:var(--pu);color:#FFFFFF;}
 .btn-sm{padding:6px 10px;font-size:9px;}
 .btn-row{display:flex;gap:8px;padding:10px 14px;align-items:center;}
 
@@ -232,7 +232,7 @@ nav::-webkit-scrollbar{display:none;}
 .rg-opt{flex:1;text-align:center;padding:7px 4px;font-size:9px;font-weight:600;
   color:var(--muted);cursor:pointer;transition:all 0.15s;position:relative;}
 .rg-opt input{position:absolute;opacity:0;width:0;height:0;}
-.rg-opt.checked{background:var(--tl);color:#0F1923;}
+.rg-opt.checked{background:var(--tl);color:#FFFFFF;}
 
 /* ── Toast ───────────────────────────── */
 #toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(10px);
@@ -294,7 +294,7 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
 <header>
   <div>
     <div class="hlogo">MARKET RADAR
-      <span>OPTIONS INTELLIGENCE · NSE V1.6.1</span>
+      <span>OPTIONS INTELLIGENCE · NSE V1.6.3</span>
     </div>
   </div>
   <div class="hright">
@@ -435,13 +435,10 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
       <div class="ts" id="ts-india_vix"></div>
     </div>
   </div>
-  <!-- v1.6.0: FII expanded into Cash / Fut / Opt sub-components -->
   <div style="margin:6px 14px 0;padding:8px 10px;background:var(--bg3);border-radius:6px;border-left:3px solid var(--am)">
     <div style="font-size:9px;font-weight:700;color:var(--am);letter-spacing:0.5px">FII / DII — PREVIOUS DAY</div>
-    <div style="font-size:8px;color:var(--muted);margin-top:2px">NSE publishes today's FII data after 6 PM. Until then use <strong style="color:var(--fg)">Moneycontrol → Markets → FII DII Activity → Summary tab</strong>. Enter figures from the most recent day shown.</div>
+    <div style="font-size:8px;color:var(--muted);margin-top:2px">NSE publishes today's FII data after 6 PM. Use <strong style="color:var(--fg)">Moneycontrol → Markets → FII DII Activity → Summary tab</strong>. Enter figures from the most recent day shown.</div>
   </div>
-
-  <!-- FII Cash (CM) — PRIMARY score signal -->
   <div class="irow">
     <div class="ilabel">
       <div class="iname">FII Cash (CM) ₹ Cr</div>
@@ -452,8 +449,6 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
       <div class="ts" id="ts-fii"></div>
     </div>
   </div>
-
-  <!-- FII Index Futures -->
   <div class="irow">
     <div class="ilabel">
       <div class="iname">FII Index Futures ₹ Cr</div>
@@ -464,30 +459,24 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
       <div class="ts" id="ts-fii_fut"></div>
     </div>
   </div>
-
-  <!-- FII Index Options — most impactful for premium pricing -->
   <div class="irow">
     <div class="ilabel">
       <div class="iname">FII Index Options ₹ Cr</div>
-      <div class="isrc" id="fii-opt-src">Moneycontrol → FII DII Summary → "FII Idx Opt"</div>
+      <div class="isrc">Moneycontrol → FII DII Summary → "FII Idx Opt"</div>
     </div>
     <div class="iright">
       <input class="inp" id="fii_opt" type="number" placeholder="-4119" oninput="onFIIFO()">
       <div class="ts" id="ts-fii_opt"></div>
     </div>
   </div>
-
-  <!-- FII F&O computed signal display -->
   <div id="fii-fo-signal" style="display:none;margin:2px 14px 4px;padding:8px 12px;border-radius:6px;font-size:8.5px;background:var(--bg3);border-left:3px solid var(--am)">
     <div style="font-size:9px;font-weight:700;letter-spacing:0.5px" id="fii-fo-hdr">FII F&O SIGNAL</div>
     <div id="fii-fo-txt" style="margin-top:3px;color:var(--muted)"></div>
   </div>
-
-  <!-- DII Cash (CM) -->
   <div class="irow">
     <div class="ilabel">
       <div class="iname">DII Cash (CM) ₹ Cr</div>
-      <div class="isrc" style="color:var(--pu)">Moneycontrol → FII DII Summary → "DII CM*" · context only</div>
+      <div class="isrc" style="color:var(--pu)">Moneycontrol → "DII CM*" · context only</div>
     </div>
     <div class="iright">
       <input class="inp" id="dii" type="number" placeholder="+5118" oninput="onInput('dii')">
@@ -830,8 +819,8 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
     </div>
 
     <div class="info-box">
-      Enter closing values after 3:45 PM. These lock as tomorrow's baseline for delta comparison.<br>
-      <strong style="color:var(--am)">⏰ FII/DII note:</strong> NSE publishes today's data after 6 PM. If filling this before 6 PM, enter <strong>previous day's</strong> FII figures from Moneycontrol → Markets → FII DII Activity → Summary.
+      Enter closing values after 3:45 PM. These lock as tomorrow's baseline for delta comparison.
+      <strong style="color:var(--am)">⏰ FII note:</strong> NSE publishes today's data after 6 PM. If filling before 6 PM, use <strong>previous day's</strong> FII figures from Moneycontrol → FII DII Activity → Summary.
     </div>
 
     <div class="sec gn">Global Closing Values</div>
@@ -869,12 +858,12 @@ select.inp{-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Cs
       <div class="ts" id="ts-ev_indiavix"></div></div>
     </div>
     <div class="irow">
-      <div class="ilabel"><div class="iname">FII Cash (CM) ₹ Cr</div><div class="isrc" style="color:var(--am)">⏰ Use PREV DAY data until 6 PM · "FII CM*" Moneycontrol</div></div>
+      <div class="ilabel"><div class="iname">FII Cash (CM) ₹ Cr</div><div class="isrc" style="color:var(--am)">⏰ Use PREV DAY until 6 PM · "FII CM*" Moneycontrol</div></div>
       <div class="iright"><input class="inp" id="ev_fii" type="number" placeholder="+2991" oninput="stampField('ev_fii')">
       <div class="ts" id="ts-ev_fii"></div></div>
     </div>
     <div class="irow">
-      <div class="ilabel"><div class="iname">FII Index Options ₹ Cr</div><div class="isrc" style="color:var(--am)">⏰ Use PREV DAY data until 6 PM · "FII Idx Opt" Moneycontrol</div></div>
+      <div class="ilabel"><div class="iname">FII Index Options ₹ Cr</div><div class="isrc" style="color:var(--am)">⏰ Use PREV DAY until 6 PM · "FII Idx Opt" Moneycontrol</div></div>
       <div class="iright"><input class="inp" id="ev_fii_opt" type="number" placeholder="-4119" oninput="stampField('ev_fii_opt')">
       <div class="ts" id="ts-ev_fii_opt"></div></div>
     </div>
@@ -1001,8 +990,9 @@ function actualExpiry(raw) {
 const gv  = id => { const e=document.getElementById(id); if(!e) return null; const v=parseFloat(e.value); return isNaN(v)?null:v; };
 const gvi = id => { const e=document.getElementById(id); if(!e) return null; const v=parseInt(e.value); return isNaN(v)?null:v; };
 const gs  = id => { const e=document.getElementById(id); if(!e) return null; return e.value||null; };
-const r5  = x  => Math.round(x/5)*5;
-const r100= x  => Math.round(x/100)*100;
+const r5   = x  => Math.round(x/5)*5;      // credit rounding to nearest ₹5
+const r50  = x  => Math.round(x/50)*50;   // NF strike snapping — NSE NF strikes in multiples of 50
+const r100 = x  => Math.round(x/100)*100; // BNF strike snapping — NSE BNF strikes in multiples of 100
 const fi  = n  => Math.abs(Math.round(n)).toLocaleString('en-IN');
 const fr  = n  => '₹'+fi(n);
 const pct = (c,p)=> p>0?(c-p)/p*100:null;
@@ -1013,55 +1003,47 @@ const TS_KEY = 'mr140-ts';
 function getTSStore(){ try{ return JSON.parse(localStorage.getItem(TS_KEY)||'{}'); }catch{ return {}; } }
 function saveTSStore(s){ try{ localStorage.setItem(TS_KEY,JSON.stringify(s)); }catch{} }
 
-// v1.6.0: FII F&O sub-component handler — computes derived signal from Fut + Opt
+// v1.6.1: FII F&O signal handler
 function onFIIFO() {
   const futEl = document.getElementById('fii_fut');
   const optEl = document.getElementById('fii_opt');
   if (futEl && futEl.value !== '') stampField('fii_fut');
   if (optEl && optEl.value !== '') stampField('fii_opt');
-
   const fut = futEl && futEl.value !== '' ? parseFloat(futEl.value) : null;
   const opt = optEl && optEl.value !== '' ? parseFloat(optEl.value) : null;
-  const sig  = document.getElementById('fii-fo-signal');
-  const hdr  = document.getElementById('fii-fo-hdr');
-  const txt  = document.getElementById('fii-fo-txt');
+  const sig = document.getElementById('fii-fo-signal');
+  const hdr = document.getElementById('fii-fo-hdr');
+  const txt = document.getElementById('fii-fo-txt');
   if (!sig) return;
-
   if (fut === null && opt === null) { sig.style.display = 'none'; return; }
-
   const net = (fut || 0) + (opt || 0);
   let color = 'var(--am)', icon = '⚡', summary = '', detail = '';
-
   if (opt !== null) {
     if (opt <= -15000) {
-      color = 'var(--rd)'; icon = '🔴';
-      summary = 'MASSIVE PUT BUYING — extreme bearish hedge';
-      detail  = `FII Idx Opt ${Math.round(opt).toLocaleString('en-IN')}Cr: FII loading puts aggressively. Premium spike likely. Widen call strikes or avoid new IC entries.`;
+      color='var(--rd)'; icon='🔴'; summary='MASSIVE PUT BUYING — extreme bearish hedge';
+      detail='FII Idx Opt '+Math.round(opt).toLocaleString('en-IN')+'Cr: FII loading puts aggressively. Widen call strikes or avoid new IC entries.';
     } else if (opt <= -5000) {
-      color = 'var(--am)'; icon = '⚠️';
-      summary = 'Heavy put buying — bearish derivative positioning';
-      detail  = `FII Idx Opt ${Math.round(opt).toLocaleString('en-IN')}Cr: Elevated put buying. Market expects downside or hedging expiry. Favour puts over calls on IC.`;
+      color='var(--am)'; icon='⚠️'; summary='Heavy put buying — bearish derivative positioning';
+      detail='FII Idx Opt '+Math.round(opt).toLocaleString('en-IN')+'Cr: Elevated put buying. Favour puts over calls on IC.';
     } else if (opt >= 5000) {
-      color = 'var(--gn)'; icon = '🟢';
-      summary = 'FII net call buying / put selling — bullish derivatives';
-      detail  = `FII Idx Opt +${Math.round(opt).toLocaleString('en-IN')}Cr: FII selling puts or buying calls. Supports bullish bias. IC call side safer.`;
+      color='var(--gn)'; icon='🟢'; summary='FII net call buying / put selling — bullish derivatives';
+      detail='FII Idx Opt +'+Math.round(opt).toLocaleString('en-IN')+'Cr: FII selling puts or buying calls. IC call side safer.';
     } else {
-      color = 'var(--am)'; icon = '💡';
-      summary = 'FII option flow moderate — watch for intraday shifts';
-      detail  = `FII Idx Opt ${(opt>=0?'+':'')+Math.round(opt).toLocaleString('en-IN')}Cr: No strong directional derivatives signal.`;
+      color='var(--am)'; icon='💡'; summary='FII option flow moderate — no strong signal';
+      detail='FII Idx Opt '+(opt>=0?'+':'')+Math.round(opt).toLocaleString('en-IN')+'Cr: No strong directional derivatives signal.';
     }
   }
-
-  const futStr = fut !== null ? `  Fut: ${(fut>=0?'+':'')+Math.round(fut).toLocaleString('en-IN')}Cr` : '';
-  const optStr = opt !== null ? `  Opt: ${(opt>=0?'+':'')+Math.round(opt).toLocaleString('en-IN')}Cr` : '';
-  const netStr = `  F&O Net: ${(net>=0?'+':'')+Math.round(net).toLocaleString('en-IN')}Cr`;
-
+  const futStr = fut!==null ? '  Fut: '+(fut>=0?'+':'')+Math.round(fut).toLocaleString('en-IN')+'Cr' : '';
+  const optStr = opt!==null ? '  Opt: '+(opt>=0?'+':'')+Math.round(opt).toLocaleString('en-IN')+'Cr' : '';
+  const netStr = '  F&O Net: '+(net>=0?'+':'')+Math.round(net).toLocaleString('en-IN')+'Cr';
   sig.style.display = 'block';
   sig.style.borderLeftColor = color;
   hdr.style.color = color;
-  hdr.innerHTML = `${icon} FII F&O SIGNAL — ${summary}`;
-  txt.innerHTML  = `<span style="color:var(--muted)">${futStr}${optStr}${netStr}</span><br>${detail}`;
+  hdr.innerHTML = icon+' FII F&O SIGNAL — '+summary;
+  txt.innerHTML = '<span style="color:var(--muted)">'+futStr+optStr+netStr+'</span><br>'+detail;
 }
+
+function stampField(id){
   const e=document.getElementById(id);
   if(!e||!e.value) return;
   const s=getTSStore();
@@ -1107,7 +1089,7 @@ function checkLocks(){
     document.getElementById('morning-msg').textContent=`Opens in ${Math.floor(ml/60)}h ${ml%60}m (8:30 AM IST)`;
     mBanner.classList.add('show');
     setDisabled(['sp500','dow','usvix','nk','hsi','crude','gold','inr','yld',
-      'gift_now','nifty_prev','gift_6am','india_vix','fii','dii','pcr_nf','pcr_bn',
+      'gift_now','nifty_prev','gift_6am','india_vix','fii','fii_fut','fii_opt','dii','pcr_nf','pcr_bn',
       'max_pain_nf','max_pain_bn','close_char'], true);
     setDisabled(['n50adv','n50dma','bnfadv'],true);
     document.getElementById('breadth-lock').classList.add('show');
@@ -1501,9 +1483,9 @@ function renderBreadth(){
 // ── DTE multiplier — calibrated to real NSE premiums ──────────
 // v1.5.0: DTE 6-7 reduced 1.12→1.00 (backtest: real needed ~0.98, we were +14% over)
 function getDteMult(dte) {
-  if (dte <= 3)  return 0.53;
-  if (dte <= 5)  return 0.86;
-  if (dte <= 7)  return 1.00;  // was 1.12 — backtest confirmed overestimate
+  if (dte <= 3)  return 0.28;   // v1.6.3: was 0.53 → DTE≤3 huge overestimate on tiny real premiums
+  if (dte <= 5)  return 0.44;   // v1.6.3: was 0.86 → DTE≤5 was +117% over
+  if (dte <= 7)  return 0.82;   // v1.6.3: was 1.00 → DTE 6-7 was +34% over
   if (dte <= 14) return 1.51;
   if (dte <= 21) return 2.04;
   if (dte <= 30) return 2.50;
@@ -1519,7 +1501,7 @@ function getDteMult(dte) {
 function getDteMultCall(dte) {
   if (dte <= 3)  return 0.53;
   if (dte <= 5)  return 0.86;
-  if (dte <= 7)  return 1.00;
+  if (dte <= 7)  return 0.82;   // v1.6.3: was 1.00 → DTE 6-7 CALL NF was +21% over
   if (dte <= 14) return 1.51;
   if (dte <= 21) return 2.04;
   if (dte <= 30) return 3.00;
@@ -1528,31 +1510,33 @@ function getDteMultCall(dte) {
   return 5.80;
 }
 
-// v1.7.0: BNF separate DTE multipliers — reverse-engineered from 3-month real premiums.
+// v1.6.3: BNF separate DTE multipliers — reverse-engineered from 3-month real premiums.
 // BNF ATR% is 0.58–0.92% of spot (vs NF 0.33–0.55%), yielding richer premiums per ATR unit.
 // NF-calibrated multipliers systematically underestimate BNF at DTE 15+.
 // Source: 134 BNF records against real NSE bhavcopy Nov 2025–Feb 2026.
+// v1.6.3: Short DTE recalibrated — DTE≤5: 0.85→0.52 (was +60% over), DTE 6-7: 0.95→0.71 (was +33%), DTE 8-14: 1.46→1.14 (was +28%)
+// DTE 15-21+ unchanged (within ±7%). DTE 22+ handled by strike placement (2.8×ATR)
 function getDteMultBNF(dte) {
-  if (dte <= 3)  return 0.55;   // ≈0.55 needed (we used 0.53) ✅ close
-  if (dte <= 5)  return 0.85;   // ≈0.55 needed at DTE1, 0.95 at DTE5 — avg 0.85
-  if (dte <= 7)  return 0.95;   // ≈0.95 needed (we used 1.00) ✅ close
-  if (dte <= 14) return 1.46;   // ≈1.46 needed (we used 1.51) ✅ close
-  if (dte <= 21) return 2.00;   // ≈2.00 needed (we used 2.04) ✅ close
-  if (dte <= 30) return 3.28;   // ≈3.28 needed (we used 2.50) 🔴 was −31% under
-  if (dte <= 45) return 4.00;   // scaled proportionally
-  if (dte <= 65) return 4.15;   // ≈4.15 needed (we used 4.41) ✅ close
+  if (dte <= 5)  return 0.52;   // v1.6.3: was 0.85 → recalibrated (backtest +60% over)
+  if (dte <= 7)  return 0.71;   // v1.6.3: was 0.95 → recalibrated (backtest +33% over)
+  if (dte <= 14) return 1.14;   // v1.6.3: was 1.46 → recalibrated (backtest +28% over)
+  if (dte <= 21) return 2.00;   // ✅ unchanged — backtest +7%
+  if (dte <= 30) return 3.28;   // ✅ unchanged
+  if (dte <= 45) return 4.00;
+  if (dte <= 65) return 4.15;
   return 5.00;
 }
 
+// v1.6.3: Short DTE recalibrated — DTE≤5: 0.80→0.50 (was +50% over), DTE 6-7: 0.95→0.71 (was +26%), DTE 8-14: 1.94→1.47 (was +25%)
+// DTE 15-21+ unchanged (within ±14%)
 function getDteMultBNFCall(dte) {
-  if (dte <= 3)  return 0.51;
-  if (dte <= 5)  return 0.80;
-  if (dte <= 7)  return 0.95;
-  if (dte <= 14) return 1.94;   // ≈1.94 needed (we used 1.51) 🔴 was −28% under
-  if (dte <= 21) return 3.44;   // ≈3.44 needed (we used 2.04) 🔴 was −41% under
-  if (dte <= 30) return 5.09;   // ≈5.09 needed (we used 3.00) 🔴 was −41% under
+  if (dte <= 5)  return 0.50;   // v1.6.3: was 0.80 → recalibrated (backtest +50% over)
+  if (dte <= 7)  return 0.71;   // v1.6.3: was 0.95 → recalibrated (backtest +26% over)
+  if (dte <= 14) return 1.47;   // v1.6.3: was 1.94 → recalibrated (backtest +25% over)
+  if (dte <= 21) return 3.44;   // ✅ unchanged — backtest −14%
+  if (dte <= 30) return 5.09;   // ✅ unchanged
   if (dte <= 45) return 6.00;
-  if (dte <= 65) return 7.56;   // ≈7.56 needed (we used 4.80) 🔴 was −37% under
+  if (dte <= 65) return 7.56;
   return 8.50;
 }
 
@@ -1701,7 +1685,7 @@ function dteConviction(dte){
   if(dte<=7)  return {label:'⚡ Near-term', note:'Max theta decay. Enter only if direction is very clear. Plan exit by day 2.', cls:'near'};
   if(dte<=21) return {label:'⭐ Optimal',   note:'Best balance of credit and time buffer. Recommended entry window.', cls:'opt'};
   if(dte<=45) return {label:'📅 Mid-term',  note:'Rich premium. Good for Iron Condor. More time to manage.', cls:'mid'};
-  return      {label:'🗓️ Far-term',         note:'Very rich premium. Wide OI walls. Lower daily theta decay.', cls:'far'};
+  return      {label:'🗓️ Far-term',         note:'Strikes placed 4×ATR from spot. Very rich premium. Wide buffer. Ideal for monthly IC. Low daily theta — plan exit at 25–30 DTE.', cls:'far'};
 }
 
 // v1.5.0: Best strike with VIX guard — when VIX > 15 force ≥2.0× ATR buffer
@@ -1709,11 +1693,13 @@ function dteConviction(dte){
 // Backtest: call strikes at 1.2×ATR placed too close to spot → premium ₹280-400
 // vs ₹135 cap. Moving to 1.6×ATR yields premium ₹130-190 — within model range.
 function bestStrike(price, atr, dte, vix, isBearSide, oiWall, pcr, isNF){
-  const round = isNF ? r5 : r100;
+  const round = isNF ? r50 : r100;  // NF→nearest 50, BNF→nearest 100 (NSE strike grid)
   // Put base multipliers (unchanged)
-  const putBase  = dte<=7?2.0 : dte<=21?1.5 : dte<=45?1.3 : 1.2;
-  // Call base multipliers — v1.7.0: DTE 22-45 raised 1.30→1.60 to fix −50.8% underestimate
-  const callBase = dte<=7?2.0 : dte<=21?1.5 : dte<=45?1.6 : 1.4;
+  // v1.6.3: DTE 22-35→2.8×ATR, DTE 36+→4.0×ATR so real premium at those distances ≈ cap
+  // At 2.8×ATR: distFactor=0.65 → estimate ~₹110-130 (vs real ₹130-180 ✅)
+  // NF strikes snap to nearest 50 (r50), BNF to nearest 100 (r100)
+  const putBase  = dte<=7?2.0 : dte<=21?1.5 : dte<=35?2.8 : 4.0;
+  const callBase = dte<=7?2.0 : dte<=21?1.5 : dte<=35?2.8 : 4.0;
   const baseMult = isBearSide ? callBase : putBase;
   const pcrAdj   = isBearSide ? pcrCallAdj(pcr, dte) : pcrPutAdj(pcr, dte);
   let mult       = baseMult + pcrAdj;
@@ -1746,8 +1732,8 @@ function buildExpiryCard(expiry, price, atr, lot, lots, vix, width, score, oiCal
 
   const callBest = bestStrike(price, atr, dte, vix, true,  oiCall, pcr, isNF);
   const putBest  = bestStrike(price, atr, dte, vix, false, oiPut,  pcr, isNF);
-  const callBuy  = callBest.strike + width;
-  const putBuy   = putBest.strike  - width;
+  const callBuy  = isNF ? r50(callBest.strike + width) : r100(callBest.strike + width);
+  const putBuy   = isNF ? r50(putBest.strike  - width) : r100(putBest.strike  - width);
 
   const callDist = (callBest.strike-price)/atr;
   const putDist  = (price-putBest.strike)/atr;
@@ -1960,7 +1946,7 @@ function buildMultiExpiry(idx){
   // v1.6.0 fix: index-aware absolute thresholds (was a single 0.55% that fired 62% of the time)
   // NF normal ATR range: 0.40–1.5%. BNF normal: 0.65–2.0%.
   // Warn only when genuinely compressed — i.e. well below the low-end of each index's normal band.
-  const atrThreshold = isNF ? 0.38 : 0.62;   // NF: <0.38%, BNF: <0.62%
+  const atrThreshold = isNF ? 0.38 : 0.30;   // NF: <0.38%, BNF: <0.30% (v1.6.3: was 0.62 — fired 62% of days)
   const atrLow = atrPct < atrThreshold;
   // Also warn when ATR seems unusually HIGH vs VIX (possible spike the user hasn't updated yet)
   // Expected ATR% ≈ VIX/100 * sqrt(1/252) * 100 * ~1.2 (intraday factor)
@@ -2102,7 +2088,7 @@ function saveEvening(){
 function editEvening(){
   EVENING_LOCKED=false;
   const flds=['ev_sp500','ev_dow','ev_usvix','ev_nk','ev_hsi','ev_crude','ev_gold','ev_inr',
-    'ev_indiavix','ev_fii','ev_pcr','ev_nifty','ev_bnf','ev_n50adv','ev_bnfadv','ev_mpnf','ev_mpbn'];
+    'ev_indiavix','ev_fii','ev_fii_opt','ev_pcr','ev_nifty','ev_bnf','ev_n50adv','ev_bnfadv','ev_mpnf','ev_mpbn'];
   setDisabled(flds,false);
   document.getElementById('btn-save-evening').style.display='inline-flex';
   document.getElementById('btn-edit-evening').style.display='none';
@@ -2181,12 +2167,12 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').cat
 
 // ── Init ──────────────────────────────────────────────────────
 loadState();
+onFIIFO();
 loadChecklist();
 restoreTS();
 checkLocks();
 setInterval(checkLocks, 60000);       // time lock refresh
 setInterval(updateEntrySignal, 60000); // entry signal refresh every minute
-onFIIFO();  // v1.6.0: restore F&O signal display on page load
 calcScore();
 renderBreadth();
 buildMultiExpiry('NF');
