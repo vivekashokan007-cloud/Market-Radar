@@ -1,4 +1,4 @@
-const CACHE = 'market-radar-v1.4.0';
+const CACHE = 'market-radar-v1.7.0';
 const FILES = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
