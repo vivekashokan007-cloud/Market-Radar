@@ -276,9 +276,16 @@ async function bhavSave(dk, data) {
   if (!cfg) return false;  // no GitHub config — local only
 
   const existing = await _ghGet(DATA_DIR + '/' + dk + '.json');
+  const isNew = !existing;  // true = brand new day, false = update
   const ok = await _ghPut(DATA_DIR + '/' + dk + '.json', data, existing ? existing.sha : null);
   if (ok) {
     await _ghUpdateIndex(JSON.parse(localStorage.getItem(BHAV_IDX) || '[]'));
+    if (isNew) {
+      const MONTH = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const d = _dkToDate(dk);
+      const label = d.getDate() + '-' + MONTH[d.getMonth()] + '-' + d.getFullYear();
+      showToast('☁️ New day saved to GitHub — data/' + dk + '.json (' + label + ')');
+    }
   }
   return ok;
 }
@@ -362,6 +369,9 @@ function nseTradingDays(from, to) {
 }
 
 // ── Date helpers ───────────────────────────────────────────────
+// BUG FIX (v2.0.2): Always use local date parts (getFullYear/Month/Date)
+// not UTC methods. JS Date at midnight IST = previous day UTC (+5:30 offset),
+// so getUTCDate() would return wrong day on any IST device. getDate() is safe.
 function _dk(d) {
   return d.getFullYear() +
     String(d.getMonth() + 1).padStart(2, '0') +
@@ -505,29 +515,87 @@ function loadBhavFiles(evt) {
 
 async function parseBhavCSV(text, fname) {
   const lines = text.split('\n'); if (lines.length < 2) return 0;
-  const hdr  = lines[0].split(',').map(h => h.trim());
-  const col  = name => hdr.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
-  const iDate=col('Date'), iExpiry=col('Expiry'), iType=col('Option type'),
-        iStrike=col('Strike'), iClose=col('Close'), iSettle=col('Settle Price'),
-        iOI=col('Open Int'), iSpot=col('Underlying Value');
-  if (iDate < 0 || iStrike < 0 || iSpot < 0) { console.warn('Bad header:', fname); return 0; }
+  const hdr = lines[0].split(',').map(h => h.trim());
+  const col = name => hdr.findIndex(h => h.toLowerCase() === name.toLowerCase());
+
+  // ── Detect format by header ────────────────────────────────
+  // New unified NSE format: BhavCopy_NSE_FO_*.csv
+  //   TradDt, XpryDt, TckrSymb, StrkPric, OptnTp, ClsPric, SttlmPric, OpnIntrst, UndrlygPric
+  // Old per-symbol format: OPTIDX_NIFTY_CE_*.csv
+  //   Date, Expiry, Option type, Strike Price, Close, Settle Price, Open Int, Underlying Value
+  const isNewFormat = hdr.includes('TradDt') || hdr.includes('TckrSymb');
+
+  let iDate, iExpiry, iSymbol, iType, iStrike, iClose, iSettle, iOI, iSpot;
+
+  if (isNewFormat) {
+    iDate   = col('TradDt');
+    iExpiry = col('XpryDt');
+    iSymbol = col('TckrSymb');
+    iType   = col('OptnTp');
+    iStrike = col('StrkPric');
+    iClose  = col('ClsPric');
+    iSettle = col('SttlmPric');
+    iOI     = col('OpnIntrst');
+    iSpot   = col('UndrlygPric');
+  } else {
+    iDate   = hdr.findIndex(h => h.toLowerCase().includes('date'));
+    iExpiry = hdr.findIndex(h => h.toLowerCase().includes('expiry'));
+    iSymbol = -1;  // old format is NIFTY-only, no symbol column needed
+    iType   = hdr.findIndex(h => h.toLowerCase().includes('option type'));
+    iStrike = hdr.findIndex(h => h.toLowerCase().includes('strike'));
+    iClose  = hdr.findIndex(h => h.toLowerCase().includes('close'));
+    iSettle = hdr.findIndex(h => h.toLowerCase().includes('settle'));
+    iOI     = hdr.findIndex(h => h.toLowerCase().includes('open int'));
+    iSpot   = hdr.findIndex(h => h.toLowerCase().includes('underlying'));
+  }
+
+  if (iDate < 0 || iStrike < 0 || iSpot < 0) {
+    console.warn('Unrecognised bhav format:', fname, hdr.slice(0,5));
+    return 0;
+  }
+
+  // ── Date parsing ──────────────────────────────────────────
+  // New format: YYYY-MM-DD   Old format: DD-Mon-YYYY
+  const parseDate = s => {
+    s = (s || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      // ISO: 2026-02-27
+      const [yr, mo, dy] = s.split('-');
+      return new Date(+yr, +mo - 1, +dy);
+    }
+    return _parseBhavDate(s);  // old DD-Mon-YYYY
+  };
 
   const byDate = {}; let count = 0;
+
   for (let i = 1; i < lines.length; i++) {
-    const c = lines[i].split(',').map(v => v.trim()); if (c.length < 6) continue;
-    const dateObj   = _parseBhavDate(c[iDate]);
-    const expiryObj = iExpiry >= 0 ? _parseBhavDate(c[iExpiry]) : null;
-    if (!dateObj || !expiryObj) continue;
+    const c = lines[i].split(',').map(v => v.trim());
+    if (c.length < 6) continue;
+
+    // New format: filter to NIFTY only (file contains all symbols)
+    if (isNewFormat && iSymbol >= 0 && c[iSymbol] !== 'NIFTY') continue;
+
+    const dateObj   = parseDate(c[iDate]);
+    const expiryObj = iExpiry >= 0 ? parseDate(c[iExpiry]) : null;
+    if (!dateObj || !expiryObj || isNaN(dateObj.getTime())) continue;
+
     const optType = c[iType]?.trim();
     if (optType !== 'CE' && optType !== 'PE') continue;
-    const strike = parseFloat(c[iStrike]), spot = parseFloat(c[iSpot]);
+
+    const strike = parseFloat(c[iStrike]);
+    const spot   = parseFloat(c[iSpot]);
     if (isNaN(strike) || isNaN(spot) || Math.abs(strike - spot) > BHAV_SPREAD) continue;
+
     const closeP = parseFloat(c[iClose]);
     const settle = iSettle >= 0 ? parseFloat(c[iSettle]) : NaN;
-    const price  = (!isNaN(closeP) && closeP > 0) ? closeP : (!isNaN(settle) && settle > 0) ? settle : null;
+    const price  = (!isNaN(closeP) && closeP > 0) ? closeP
+                 : (!isNaN(settle) && settle > 0)  ? settle
+                 : null;
     if (price === null) continue;
+
     const oi = iOI >= 0 ? parseFloat(c[iOI]) : NaN;
     const dk = _dk(dateObj), ek = _dk(expiryObj);
+
     if (!byDate[dk]) byDate[dk] = { spot, opts: {}, pe_oi: {}, ce_oi: {}, uploaded_at: Date.now() };
     byDate[dk].spot = spot;
     byDate[dk].opts[optType + '_' + Math.round(strike) + '_' + ek] = price;
@@ -620,7 +688,7 @@ async function updateBhavStatus() {
     `<div style="font-family:var(--font-mono);font-size:15px;font-weight:800;color:var(--tl)">${dates.length}</div></div>` +
     `<div style="text-align:center"><div style="font-size:6.5px;color:var(--muted);text-transform:uppercase">Latest</div>` +
     `<div style="font-size:8px;font-weight:700;color:var(--gn);margin-top:3px">${label}</div></div>` +
-    `<div style="text-align:center"><div style="font-size:6.5px;color:var(--muted);text-transform:uppercase">Bhav ATR</div>` +
+    `<div style="text-align:center"><div style="font-size:6.5px;color:var(--muted);text-transform:uppercase">Vol Proxy</div>` +
     `<div style="font-family:var(--font-mono);font-size:15px;font-weight:800;color:${atr ? 'var(--am)' : 'var(--muted)'}">` + (atr || '—') + `</div></div>` +
     `<div style="text-align:center"><div style="font-size:6.5px;color:var(--muted);text-transform:uppercase">Storage</div>` +
     `<div style="font-size:8px;font-weight:700;color:${cfg ? 'var(--gn)' : 'var(--am)'};margin-top:3px">${cfg ? '☁️ GitHub' : '💾 Local'}</div></div></div>` +

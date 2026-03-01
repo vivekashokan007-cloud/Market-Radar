@@ -792,6 +792,11 @@ function estimateStraddle(price, dte, vix){
 }
 
 // ── Expiry calendar with NSE holiday fallback ──────────────────
+// BUG FIX (v2.0.2): NSE NIFTY weekly expiry is Tuesday, but monthly
+// expiry (last contract of month) sometimes falls on Monday when the
+// last Tuesday of the month is a holiday and rolls back to Monday.
+// Confirmed from bhav: 2026-03-02 (Mon) and 2026-03-30 (Mon) are real expiries.
+// Fix: accept Monday OR Tuesday as valid NF expiry days.
 function getExpiries(idx){
   const isNF = idx==='NF';
   const today = new Date();
@@ -802,11 +807,12 @@ function getExpiries(idx){
   function fmt(d){ return String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()]; }
 
   if(isNF){
-    // NF: weekly every Tuesday with holiday fallback — MAX 3 expiries
+    // NF: weekly — Tuesday normally, Monday when Tuesday is holiday
+    // Accept day===1 (Monday) OR day===2 (Tuesday)
     const d = new Date(today);
     d.setDate(d.getDate()+1);
     while(expiries.length < 3){
-      if(d.getDay()===2){
+      if(d.getDay()===1 || d.getDay()===2){
         const { d: actD, shifted } = actualExpiry(new Date(d));
         if(actD > today){
           const dte = Math.round((actD-today)/86400000);
@@ -814,6 +820,7 @@ function getExpiries(idx){
         }
       }
       d.setDate(d.getDate()+1);
+      if(d - today > 90*86400000) break; // safety — max 90 days ahead
     }
   } else {
     // BNF: last Tuesday of each month — MAX 2 monthlies only
@@ -830,7 +837,7 @@ function getExpiries(idx){
       }
       month++;
       if(month>11){month=0; year++;}
-      if(year>2026) break; // safety
+      if(year>2027) break; // safety
     }
   }
   return expiries;
@@ -1033,7 +1040,9 @@ function buildCommand() {
   // ── Capital metrics (₹1L fixed) ────────────────────────────
   const cm       = capitalMetrics(icMidUnit, width, NF_LOT_SIZE, NF_MARGIN_PER_LOT);
   const icCredit = icMidUnit * NF_LOT_SIZE * cm.safeLots;
-  const icMaxL   = Math.max((width-callMid), (width-putMid)) * NF_LOT_SIZE * cm.safeLots;
+  // BUG FIX (v2.0.2): max loss of IC = (width - total credit) per spread, not max of one leg.
+  // Previous: max(width-callMid, width-putMid) overstated by ~35%
+  const icMaxL   = (width - icMidUnit) * NF_LOT_SIZE * cm.safeLots;
 
   // ── Bhav actual lookup ─────────────────────────────────────
   const bhav     = bhavIC(callBest.strike, callBuy, putBest.strike, putBuy, bestExp.d);
