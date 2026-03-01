@@ -22,7 +22,7 @@
 <header>
   <div>
     <div class="hlogo">MARKET RADAR
-      <span>OPTIONS INTELLIGENCE · NSE V2.0.2</span>
+      <span>OPTIONS INTELLIGENCE · NSE V2.1.0</span>
     </div>
   </div>
   <div class="hright">
@@ -447,6 +447,22 @@
         <input class="igrid-input" id="nf_oi_put" type="text" inputmode="decimal" placeholder="25200" oninput="buildCommand();stampField('nf_oi_put')">
         <div class="igrid-ts" id="ts-nf_oi_put"></div>
       </div>
+    </div>
+
+    <!-- Event flag — drives straddle/strangle recommendation -->
+    <div style="margin:8px 0 0;background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:10px 12px;display:flex;align-items:center;gap:10px">
+      <div style="flex:1">
+        <div style="font-size:8px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Major Event Today / Tomorrow</div>
+        <div style="font-size:8px;color:var(--muted)">Enables Long Straddle/Strangle when VIX &lt; 12</div>
+      </div>
+      <select class="igrid-input" id="event_flag" style="width:130px;font-size:10px" onchange="buildCommand()">
+        <option value="none">None</option>
+        <option value="rbi">RBI Policy</option>
+        <option value="budget">Union Budget</option>
+        <option value="expiry">Expiry Week</option>
+        <option value="earnings">Major Earnings</option>
+        <option value="other">Other Major</option>
+      </select>
     </div>
   </div>
 

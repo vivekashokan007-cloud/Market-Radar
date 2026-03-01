@@ -5,16 +5,16 @@
 // ══════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════
-// MARKET RADAR v1.7.0
-// v1.5.0: PCR from score, DTE 6-7 mult, distFactorCall,
-//         DTE≤5 AVOID, VIX guard, ±5% stress test
-// v1.6.0: ATR detector index-aware, distFactorCall DTE-aware,
-//         getDteMultCall() DTE 22-30=3.00
-// v1.7.0: getDteMultBNF/getDteMultBNFCall — BNF-specific mults
-//         calibrated from 3-month NSE bhavcopy (134 records).
-//         bestStrike callBase 1.30→1.60 at DTE 22-45.
-//         distFactorCall DTE≤7: 0.72→0.62.
-//         BNF limited-data disclaimer on all expiry cards.
+// MARKET RADAR v2.1.0
+// v2.0.2: getExpiries Monday fix, icMaxL bug fix, bhavATR label.
+// v2.1.0: 7-strategy engine. Bull Call Spread, Bear Put Spread,
+//         Long Straddle, Long Strangle added alongside existing IC,
+//         Bull Put Spread, Bear Call Spread.
+//         Credit/debit auto-selector via VIX+PCR vote system.
+//         Event flag input for straddle/strangle trigger.
+//         Moneyness labels (ATM/OTM/Far OTM) on all strikes.
+//         NSE 2026 calendar fixed per circular CMTR71775 (15 holidays).
+//         Fixed: down5/up5 undefined bug in stress test.
 // ═══════════════════════════════════════════════════════════════
 
 // ── State ─────────────────────────────────────────────────────
@@ -46,10 +46,27 @@ const W = {
 };
 
 // ── NSE Holiday Calendar 2026 ──────────────────────────────────
+// Source: Official NSE circular NSE/CMTR/71775 dated Dec 12, 2025
+// Fixed v2.1.0: Removed Jan-01 (not NSE holiday), Nov-09 (not in circular)
+// Fixed Jun-16 → Jun-26 (Muharram). Added: Mar-26 (Ram Navami),
+// May-28 (Bakri Id), Sep-14 (Ganesh Chaturthi), Oct-02 (Gandhi Jayanti),
+// Oct-20 (Dussehra). Total: 15 weekday holidays (matches official list).
 const NSE_HOLIDAYS_2026 = [
-  '2026-01-01','2026-01-26','2026-03-03','2026-03-31',
-  '2026-04-03','2026-04-14','2026-05-01','2026-06-16',
-  '2026-11-09','2026-11-10','2026-11-24','2026-12-25'
+  '2026-01-26',  // Republic Day
+  '2026-03-03',  // Holi
+  '2026-03-26',  // Shri Ram Navami
+  '2026-03-31',  // Shri Mahavir Jayanti
+  '2026-04-03',  // Good Friday
+  '2026-04-14',  // Dr. Baba Saheb Ambedkar Jayanti
+  '2026-05-01',  // Maharashtra Day
+  '2026-05-28',  // Bakri Id
+  '2026-06-26',  // Muharram
+  '2026-09-14',  // Ganesh Chaturthi
+  '2026-10-02',  // Mahatma Gandhi Jayanti
+  '2026-10-20',  // Dussehra
+  '2026-11-10',  // Diwali-Balipratipada
+  '2026-11-24',  // Prakash Gurpurb Sri Guru Nanak Dev
+  '2026-12-25',  // Christmas
 ].map(s => new Date(s+'T00:00:00'));
 
 function isTradingDay(d) {
@@ -901,6 +918,64 @@ function strikeNarration(distAtr) {
   return                     { label:'Deep OTM',        color:'var(--tl)' };
 }
 
+// ── v2.1.0: Moneyness label for any strike ─────────────────────
+// Returns { label, color } based on distance from spot
+// isCall=true: OTM when strike > spot | isCall=false: OTM when strike < spot
+function moneyness(strike, spot, isCall) {
+  const d = isCall ? (strike - spot) : (spot - strike);
+  if (Math.abs(d) <= 75)  return { label:'ATM',      color:'var(--am)' };
+  if (d < 0)               return { label:'ITM',      color:'var(--rd)' };
+  if (d <= 200)            return { label:'OTM',      color:'var(--muted)' };
+  if (d <= 400)            return { label:'Far OTM',  color:'var(--gn)' };
+  return                          { label:'Deep OTM', color:'var(--tl)' };
+}
+
+// ── v2.1.0: Direction category from score ─────────────────────
+function directionCategory(score) {
+  const s = score || 0;
+  if (s >  0.60) return 'STRONG_BULL';
+  if (s >  0.25) return 'MILD_BULL';
+  if (s > -0.25) return 'NEUTRAL';
+  if (s > -0.60) return 'MILD_BEAR';
+  return 'STRONG_BEAR';
+}
+
+// ── v2.1.0: Credit vs Debit selector ──────────────────────────
+// VIX vote (weight 2) + PCR vote (weight 1). Tie → credit wins.
+// isBull=true for bullish direction, false for bearish.
+function preferCreditStrategy(vix, pcr, isBull) {
+  let cv = 0, dv = 0;
+  // VIX: high VIX = premiums swollen = sell (credit)
+  if (vix >= 14) cv += 2; else dv += 2;
+  // PCR: for bull, high PCR means put premiums elevated → sell puts (credit)
+  //      for bear, low PCR means call premiums elevated → sell calls (credit)
+  const p = pcr || 1.0;
+  if (isBull)  { if (p >= 1.2) cv += 1; else if (p <= 0.9)  dv += 1; }
+  else         { if (p <= 0.85) cv += 1; else if (p >= 1.3) dv += 1; }
+  return cv >= dv; // tie → credit
+}
+
+// ── v2.1.0: Net debit estimator for Bull Call / Bear Put Spread ─
+// Calibrated for 200pt NF spread. DTE and VIX aware.
+// Returns per-unit figures (multiply by lot × lots for total).
+function estimateDebitSpread(width, dte, vix) {
+  const dtF = dte <= 5  ? 0.15
+            : dte <= 7  ? 0.22
+            : dte <= 14 ? 0.36
+            : dte <= 21 ? 0.44
+            : 0.50;
+  const vxF = vix < 12 ? 0.72 : vix < 14 ? 0.86 : vix < 16 ? 1.00 : 1.18;
+  const raw = r5(width * dtF * vxF);
+  const nd  = Math.min(raw, r5(width * 0.68)); // cap at 68% of width
+  const mp  = width - nd;
+  return {
+    netDebit: nd,
+    ndMin: r5(nd * 0.80), ndMax: r5(nd * 1.25),
+    maxProfit: mp,
+    mpMin: r5(mp * 0.80), mpMax: r5(mp * 1.10)
+  };
+}
+
 // BNF viability: 3-state
 function bnfViability(score, vix, bnfAtr, bnfSpot, bnfPcr) {
   const absScore = Math.abs(score||0);
@@ -953,21 +1028,23 @@ function pickBestExpiry(expiries) {
   return expiries[0] || null;
 }
 
-// Main command builder — replaces buildMultiExpiry
+// Main command builder — v2.1.0: 7-strategy engine
 function buildCommand() {
   const out = document.getElementById('cmd-output');
   if (!out) return;
 
-  const price = gv('nf_price');
-  const atr   = gv('nf_atr');
-  const vix   = gv('india_vix') || 14;
-  const score = SCORE || 0;
-  const pcr   = gv('pcr_nf');
-  const oiCall= gv('nf_oi_call');
-  const oiPut = gv('nf_oi_put');
+  const price  = gv('nf_price');
+  const atr    = gv('nf_atr');
+  const vix    = gv('india_vix') || 14;
+  const score  = SCORE || 0;
+  const pcr    = gv('pcr_nf');
+  const oiCall = gv('nf_oi_call');
+  const oiPut  = gv('nf_oi_put');
   const maxPain = gv('nf_maxpain');
+  const eventFlag = document.getElementById('event_flag')?.value || 'none';
+  const hasEvent  = eventFlag !== 'none';
 
-  // BNF data
+  // BNF inputs
   const bnfPrice = gv('bn_price');
   const bnfAtr   = gv('bn_atr');
   const bnfPcr   = gv('pcr_bn');
@@ -980,85 +1057,160 @@ function buildCommand() {
       <div style="margin:20px 14px;text-align:center;color:var(--muted)">
         <div style="font-size:32px;margin-bottom:12px">📥</div>
         <div style="font-size:12px;font-weight:700">Enter Nifty 50 inputs below</div>
-        <div style="font-size:9px;margin-top:4px">Spot Price · ATR · Lot Size — your recommendation appears instantly</div>
+        <div style="font-size:9px;margin-top:4px">Spot Price · ATR · PCR — your recommendation appears instantly</div>
       </div>`;
     return;
   }
 
-  // ── GO/NO-GO Decision ─────────────────────────────────────
-  const absScore = Math.abs(score);
-  let goState, goIcon, goLabel, goReason;
-
-  // DTE check — get today's expiries
+  // ── Expiry ─────────────────────────────────────────────────
   const expiries = getExpiries('NF');
   const bestExp  = pickBestExpiry(expiries);
+
+  // ── Direction & strategy selection ─────────────────────────
+  const dirCat  = directionCategory(score);
+  const isBull  = dirCat === 'STRONG_BULL' || dirCat === 'MILD_BULL';
+  const isBear  = dirCat === 'STRONG_BEAR' || dirCat === 'MILD_BEAR';
+  const isNeut  = dirCat === 'NEUTRAL';
+  const useCredit = (dirCat === 'MILD_BULL' || dirCat === 'MILD_BEAR')
+                  ? preferCreditStrategy(vix, pcr, isBull)
+                  : true; // IC and strong directional don't use this flag
+
+  // ── GO/NO-GO & primary strategy selection ──────────────────
+  let goState, goIcon, goLabel, goReason, primaryStrat, altStrat;
 
   if (!bestExp) {
     goState='avoid'; goIcon='⚠️'; goLabel='NO VALID EXPIRY';
     goReason='Could not find a suitable expiry. Check dates.';
+    primaryStrat='AVOID';
   } else if (bestExp.dte <= 5) {
     goState='avoid'; goIcon='🚫'; goLabel='EXPIRY WEEK — DO NOT OPEN';
     goReason=`${bestExp.dte} DTE is too close. Real premiums ₹5–₹30 — not worth the risk. CLOSE existing positions only.`;
-  } else if (absScore >= 0.8) {
-    goState='avoid'; goIcon='🔴'; goLabel='SKIP TODAY — STRONG TREND';
-    goReason=`Score ${score>=0?'+':''}${score.toFixed(2)} — market strongly ${score>0?'bullish':'bearish'}. IC will lose one leg almost certainly.`;
+    primaryStrat='AVOID';
   } else if (vix >= 18) {
-    goState='avoid'; goIcon='🔴'; goLabel='SKIP TODAY — HIGH VIX';
-    goReason=`India VIX ${vix} ≥ 18. Panic mode — IC win rate drops to ~25%. Stay out.`;
-  } else if (absScore >= 0.4 || vix >= 15) {
-    goState='caution'; goIcon='🟡'; goLabel='TRADE WITH CAUTION';
-    goReason = absScore >= 0.4
-      ? `Mild ${score>0?'bullish':'bearish'} bias (${score>=0?'+':''}${score.toFixed(2)}). Widen ${score>0?'call':'put'} side by 50pts. Reduce to 50% position size.`
-      : `VIX ${vix} in elevated zone. Use wider strikes. Consider only the safer leg.`;
+    goState='avoid'; goIcon='🔴'; goLabel='SKIP TODAY — VIX TOO HIGH';
+    goReason=`India VIX ${vix} ≥ 18 — panic territory. All strategy win rates collapse. Stay fully out.`;
+    primaryStrat='AVOID';
   } else {
-    goState='go'; goIcon='🟢'; goLabel='TRADE TODAY — NIFTY 50';
-    goReason=`Score ${score>=0?'+':''}${score.toFixed(2)} (neutral), VIX ${vix}, ${bestExp.dte} DTE — ideal IC conditions.`;
+    // Route by direction
+    if (dirCat === 'STRONG_BULL') {
+      goState='go'; goIcon='📈'; goLabel='STRONG BULL — BULL CALL SPREAD';
+      goReason=`Score +${score.toFixed(2)} — strong upside bias. Buy ATM CE, sell OTM CE. Defined risk, participates in the move.`;
+      primaryStrat='BULL_CALL'; altStrat='BULL_PUT';
+    } else if (dirCat === 'MILD_BULL') {
+      goState = vix >= 15 ? 'caution' : 'go';
+      goIcon  = goState==='go' ? '🟢' : '🟡';
+      if (useCredit) {
+        primaryStrat='BULL_PUT'; altStrat='BULL_CALL';
+        goLabel = `${goState==='caution'?'⚠️ CAUTION':'MILD BULL'} — BULL PUT SPREAD`;
+        goReason= `Score +${score.toFixed(2)}, VIX ${vix}${vix>=14?' (elevated — premiums rich, selling preferred)':''}.`;
+      } else {
+        primaryStrat='BULL_CALL'; altStrat='BULL_PUT';
+        goLabel = `${goState==='caution'?'⚠️ CAUTION':'MILD BULL'} — BULL CALL SPREAD`;
+        goReason= `Score +${score.toFixed(2)}, VIX ${vix} < 14 — premiums compressed. Debit spread better value today.`;
+      }
+    } else if (dirCat === 'NEUTRAL') {
+      if (hasEvent && vix < 12) {
+        goState='go'; goIcon='⚡'; goLabel='EVENT PLAY — LONG STRADDLE + STRANGLE';
+        goReason=`Neutral score + ${eventFlag.toUpperCase()} event + VIX ${vix} (very low IV). Buying volatility before event is optimal.`;
+        primaryStrat='STRADDLE'; altStrat='IC';
+      } else if (vix >= 15) {
+        goState='caution'; goIcon='🟡'; goLabel='CAUTION — IC WITH WIDER STRIKES';
+        goReason=`Neutral score but VIX ${vix} elevated. Widen strike buffer by 50–100pts. Consider 50% position size.`;
+        primaryStrat='IC'; altStrat = hasEvent ? 'STRADDLE' : null;
+      } else {
+        goState='go'; goIcon='🟢'; goLabel='TRADE TODAY — IRON CONDOR';
+        goReason=`Score ${score>=0?'+':''}${score.toFixed(2)} (neutral), VIX ${vix}, ${bestExp.dte} DTE — ideal IC conditions.`;
+        primaryStrat='IC'; altStrat = (hasEvent && vix < 14) ? 'STRADDLE' : null;
+      }
+    } else if (dirCat === 'MILD_BEAR') {
+      goState = vix >= 15 ? 'caution' : 'go';
+      goIcon  = goState==='go' ? '🟢' : '🟡';
+      if (useCredit) {
+        primaryStrat='BEAR_CALL'; altStrat='BEAR_PUT';
+        goLabel = `${goState==='caution'?'⚠️ CAUTION':'MILD BEAR'} — BEAR CALL SPREAD`;
+        goReason= `Score ${score.toFixed(2)}, VIX ${vix}${vix>=14?' — call premiums elevated. Selling preferred.':''}.`;
+      } else {
+        primaryStrat='BEAR_PUT'; altStrat='BEAR_CALL';
+        goLabel = `${goState==='caution'?'⚠️ CAUTION':'MILD BEAR'} — BEAR PUT SPREAD`;
+        goReason= `Score ${score.toFixed(2)}, VIX ${vix} < 14 — premiums compressed. Debit spread better value today.`;
+      }
+    } else { // STRONG_BEAR
+      goState='go'; goIcon='📉'; goLabel='STRONG BEAR — BEAR PUT SPREAD';
+      goReason=`Score ${score.toFixed(2)} — strong downside bias. Buy ATM PE, sell OTM PE. Defined risk, participates in the fall.`;
+      primaryStrat='BEAR_PUT'; altStrat='BEAR_CALL';
+    }
   }
 
-  // ── Strike calculation ─────────────────────────────────────
-  const width = 200;
-  const callBest = bestStrike(price, atr, bestExp.dte, vix, true,  oiCall, pcr, true);
-  const putBest  = bestStrike(price, atr, bestExp.dte, vix, false, oiPut,  pcr, true);
+  // ── IC calculations (always — used for IC path + alternatives) ─
+  const width    = 200;
+  const callBest = bestStrike(price, atr, bestExp?.dte||14, vix, true,  oiCall, pcr, true);
+  const putBest  = bestStrike(price, atr, bestExp?.dte||14, vix, false, oiPut,  pcr, true);
   const callBuy  = r50(callBest.strike + width);
   const putBuy   = r50(putBest.strike  - width);
-
   const callDist = (callBest.strike - price) / atr;
   const putDist  = (price - putBest.strike) / atr;
-
   const callNarr = strikeNarration(callDist);
   const putNarr  = strikeNarration(putDist);
-
-  // ── Premium estimation ─────────────────────────────────────
-  const pa       = pcrPremAdj(pcr, bestExp.dte);
-  const crBase   = estimateCredit(width, bestExp.dte, vix, true);
-  const callMid  = Math.min(r5(crBase.midCall * distFactorCall(callDist, bestExp.dte) / Math.max(pa,1)), r5(width*0.68));
-  const putMid   = Math.min(r5(crBase.mid     * distFactor(putDist)    * pa),                           r5(width*0.68));
+  const pa       = pcrPremAdj(pcr, bestExp?.dte||14);
+  const crBase   = estimateCredit(width, bestExp?.dte||14, vix, true);
+  const callMid  = Math.min(r5(crBase.midCall * distFactorCall(callDist, bestExp?.dte||14) / Math.max(pa,1)), r5(width*0.68));
+  const putMid   = Math.min(r5(crBase.mid     * distFactor(putDist) * pa), r5(width*0.68));
   const callMin  = r5(callMid*0.80), callMax = r5(callMid*1.22);
   const putMin   = r5(putMid*0.80),  putMax  = r5(putMid*1.22);
   const icMidUnit = callMid + putMid;
-
-  // ── Capital metrics (₹1L fixed) ────────────────────────────
-  const cm       = capitalMetrics(icMidUnit, width, NF_LOT_SIZE, NF_MARGIN_PER_LOT);
-  const icCredit = icMidUnit * NF_LOT_SIZE * cm.safeLots;
-  // BUG FIX (v2.0.2): max loss of IC = (width - total credit) per spread, not max of one leg.
-  // Previous: max(width-callMid, width-putMid) overstated by ~35%
-  const icMaxL   = (width - icMidUnit) * NF_LOT_SIZE * cm.safeLots;
-
-  // ── Bhav actual lookup ─────────────────────────────────────
-  const bhav     = bhavIC(callBest.strike, callBuy, putBest.strike, putBuy, bestExp.d);
-  const bhavAtr  = bhavATR();
-  const bhavPcr  = bhavPCR(bestExp.d);
-  // If bhav has PCR for this expiry, use it — more accurate than user-entered total PCR
-  const effectivePcr = bhavPcr || pcr;
-  // Credit to use for exits: bhav actual if available, else model estimate
-  const exitBase = bhav ? bhav.total : icMidUnit;
+  const cm        = capitalMetrics(icMidUnit, width, NF_LOT_SIZE, NF_MARGIN_PER_LOT);
+  const icCredit  = icMidUnit * NF_LOT_SIZE * cm.safeLots;
+  const icMaxL    = (width - icMidUnit) * NF_LOT_SIZE * cm.safeLots;
+  const bhav      = bestExp ? bhavIC(callBest.strike, callBuy, putBest.strike, putBuy, bestExp.d) : null;
+  const bhavAtr   = bhavATR();
+  const bhavPcr   = bestExp ? bhavPCR(bestExp.d) : null;
+  const exitBase  = bhav ? bhav.total : icMidUnit;
   const exitCredit = exitBase * NF_LOT_SIZE * cm.safeLots;
-  const callRR   = callMid>0 ? r5((width-callMid)/callMid) : 99;
-  const putRR    = putMid>0  ? r5((width-putMid)/putMid)   : 99;
-  const callWP   = winProb(bestExp.dte, callDist);
-  const putWP    = winProb(bestExp.dte, putDist);
+  const callRR    = callMid>0 ? r5((width-callMid)/callMid) : 99;
+  const putRR     = putMid>0  ? r5((width-putMid)/putMid)   : 99;
+  const callWP    = bestExp ? winProb(bestExp.dte, callDist) : 0;
+  const putWP     = bestExp ? winProb(bestExp.dte, putDist)  : 0;
+  // ── FIX v2.1.0: down5/up5 were undefined — bug causes NaN in stress test
+  const down5     = price * 0.95;
+  const up5       = price * 1.05;
   const putBreach  = down5 < putBest.strike;
   const callBreach = up5   > callBest.strike;
+
+  // ── Debit spread calculations (Bull Call / Bear Put) ──────
+  const dte = bestExp?.dte || 14;
+  const ds  = estimateDebitSpread(width, dte, vix);
+  const atmStrike  = r50(price);  // ATM = spot rounded to nearest 50
+  // Bull Call Spread: Buy ATM CE, Sell ATM+200 CE
+  const bcsSellStrike = atmStrike;
+  const bcsBuyStrike  = r50(atmStrike + width);  // protective leg
+  // Bear Put Spread: Buy ATM PE, Sell ATM-200 PE
+  const bpsSellStrike = atmStrike;
+  const bpsBuyStrike  = r50(atmStrike - width);  // protective leg
+  // Debit spread capital: just net debit × lots (no margin needed)
+  const dsLots    = cm.safeLots; // use same lot sizing for consistency
+  const dsDebit   = ds.netDebit * NF_LOT_SIZE * dsLots;
+  const dsProfit  = ds.maxProfit * NF_LOT_SIZE * dsLots;
+  const dsBEPbull = atmStrike + ds.netDebit;  // Bull Call BEP
+  const dsBEPbear = atmStrike - ds.netDebit;  // Bear Put BEP
+
+  // ── Straddle / Strangle ────────────────────────────────────
+  const sd      = estimateStraddle(price, dte, vix);
+  const sdTotal = sd.unit * NF_LOT_SIZE * cm.safeLots;
+  const stgCE   = r50(atmStrike + width);   // Strangle OTM CE
+  const stgPE   = r50(atmStrike - width);   // Strangle OTM PE
+  const stgUnit = r5(sd.unit * 0.54);       // Strangle ≈ 54% of straddle cost
+  const stgTotal = stgUnit * NF_LOT_SIZE * cm.safeLots;
+
+  // ── Moneyness labels (v2.1.0) ─────────────────────────────
+  const callSellMn = moneyness(callBest.strike, price, true);
+  const callBuyMn  = moneyness(callBuy,         price, true);
+  const putSellMn  = moneyness(putBest.strike,  price, false);
+  const putBuyMn   = moneyness(putBuy,          price, false);
+  const atmMn      = moneyness(atmStrike, price, true); // should always be ATM
+  const bcsOTMmn   = moneyness(bcsBuyStrike, price, true);
+  const bpsOTMmn   = moneyness(bpsBuyStrike, price, false);
+  const stgCEmn    = moneyness(stgCE, price, true);
+  const stgPEmn    = moneyness(stgPE, price, false);
 
   // ── BNF viability ─────────────────────────────────────────
   const bnfViz = bnfViability(score, vix, bnfAtr||0, bnfPrice||0, bnfPcr);
@@ -1071,38 +1223,22 @@ function buildCommand() {
       maxPainNote = `Max Pain ${f(maxPain)} — spot is ${mpDiff>0?'₹'+f(mpDiff)+' below':'₹'+f(Math.abs(mpDiff))+' above'} pain level`;
   }
 
-  // ── VIX context bar ───────────────────────────────────────
-  const vixPct = Math.min(100, (vix / 25) * 100);
+  // ── VIX context ────────────────────────────────────────────
+  const vixPct   = Math.min(100, (vix / 25) * 100);
   const vixColor = vix < 14 ? 'var(--gn)' : vix < 16 ? 'var(--am)' : 'var(--rd)';
+  const dteSweetSpot = bestExp && bestExp.dte >= 11 && bestExp.dte <= 21;
+  const dteColor     = dteSweetSpot ? 'var(--gn)' : bestExp && bestExp.dte <= 5 ? 'var(--rd)' : 'var(--am)';
 
-  // ── DTE sweet spot indicator ───────────────────────────────
-  const dteSweetSpot = bestExp.dte >= 11 && bestExp.dte <= 21;
-  const dteColor = dteSweetSpot ? 'var(--gn)' : bestExp.dte <= 5 ? 'var(--rd)' : 'var(--am)';
+  // ══════════════════════════════════════════════════════════
+  // RENDER HELPERS (inline — keep closure access to all vars)
+  // ══════════════════════════════════════════════════════════
 
-  // ── Render ─────────────────────────────────────────────────
-  out.innerHTML = `
+  // ── Moneyness badge ────────────────────────────────────────
+  const mnBadge = (mn) =>
+    `<span style="font-size:7.5px;font-weight:700;padding:1px 5px;border-radius:3px;background:${mn.color}22;color:${mn.color};border:1px solid ${mn.color}44;margin-left:4px">${mn.label}</span>`;
 
-  <!-- GO/NO-GO Banner -->
-  <div class="go-banner ${goState}">
-    <div class="go-icon">${goIcon}</div>
-    <div>
-      <div class="go-status" style="color:${goState==='go'?'var(--gn)':goState==='caution'?'var(--am)':'var(--rd)'}">${goLabel}</div>
-      <div class="go-reason">${goReason}</div>
-    </div>
-  </div>
-
-  ${goState === 'avoid' ? `
-  <!-- AVOID details -->
-  <div style="margin:10px 14px 0;background:var(--bg2);border-radius:var(--r);padding:14px;border:1px solid var(--border)">
-    <div style="font-size:10px;color:var(--muted);line-height:1.8">
-      ${bestExp ? `📅 Next tradeable expiry: <strong style="color:var(--text)">${bestExp.label} (${bestExp.dte} DTE)</strong>` : ''}
-      <br>⏰ Come back when conditions improve — check VERDICT tab for score trend.
-      ${maxPainNote ? `<br>📍 ${maxPainNote}` : ''}
-    </div>
-  </div>
-  ` : `
-
-  <!-- Command Card — The ONE Trade -->
+  // ── IC primary card ────────────────────────────────────────
+  const renderIC = () => `
   <div class="cmd-card">
     <div class="cmd-hdr">
       <div>
@@ -1120,119 +1256,419 @@ function buildCommand() {
         <div class="cmd-credit-range" style="color:var(--muted)">unit ₹${callMin+putMin}–${callMax+putMax}</div>
       </div>
     </div>
-
-    <!-- Two legs side by side -->
     <div class="cmd-legs">
       <div class="cmd-leg call">
         <div class="cmd-leg-type">🔴 Bear Call Spread</div>
-        <div class="cmd-leg-sell">Sell ${f(callBest.strike)} CE</div>
-        <div class="cmd-leg-buy">Buy  ${f(callBuy)} CE</div>
+        <div class="cmd-leg-sell">Sell ${f(callBest.strike)} CE ${mnBadge(callSellMn)}</div>
+        <div class="cmd-leg-buy">Buy&nbsp; ${f(callBuy)} CE ${mnBadge(callBuyMn)}</div>
         <div class="cmd-leg-narration" style="color:${callNarr.color}">${callNarr.label} · ${callDist.toFixed(1)}×ATR</div>
         <div class="cmd-leg-credit">₹${callMin}–${callMax}/unit</div>
       </div>
       <div class="cmd-leg put">
         <div class="cmd-leg-type">🟢 Bull Put Spread</div>
-        <div class="cmd-leg-sell">Sell ${f(putBest.strike)} PE</div>
-        <div class="cmd-leg-buy">Buy  ${f(putBuy)} PE</div>
+        <div class="cmd-leg-sell">Sell ${f(putBest.strike)} PE ${mnBadge(putSellMn)}</div>
+        <div class="cmd-leg-buy">Buy&nbsp; ${f(putBuy)} PE ${mnBadge(putBuyMn)}</div>
         <div class="cmd-leg-narration" style="color:${putNarr.color}">${putNarr.label} · ${putDist.toFixed(1)}×ATR</div>
         <div class="cmd-leg-credit">₹${putMin}–${putMax}/unit</div>
       </div>
     </div>
-
-    <!-- Bhav Actual or Model note -->
     ${bhav ? `
     <div style="background:rgba(0,180,255,0.05);border:1px solid rgba(0,180,255,0.2);border-radius:5px;padding:8px 10px;margin:6px 0 2px">
       <div style="font-size:7px;font-weight:700;letter-spacing:1px;color:var(--tl);text-transform:uppercase;margin-bottom:5px">📊 ACTUAL FROM BHAV COPY · ${bhavLatestLabel()}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:8px">
-        <div>
-          <div style="color:var(--muted);margin-bottom:2px">🔴 Call spread</div>
+        <div><div style="color:var(--muted);margin-bottom:2px">🔴 Call spread</div>
           <div style="font-family:var(--font-mono);font-weight:700;font-size:11px;color:var(--rd)">₹${bhav.callNet}/unit</div>
-          <div style="color:var(--muted);font-size:7px;margin-top:1px">${f(callBest.strike)}CE ₹${bhav.cs} − ${f(callBuy)}CE ₹${bhav.cb}</div>
-        </div>
-        <div>
-          <div style="color:var(--muted);margin-bottom:2px">🟢 Put spread</div>
+          <div style="color:var(--muted);font-size:7px;margin-top:1px">${f(callBest.strike)}CE ₹${bhav.cs} − ${f(callBuy)}CE ₹${bhav.cb}</div></div>
+        <div><div style="color:var(--muted);margin-bottom:2px">🟢 Put spread</div>
           <div style="font-family:var(--font-mono);font-weight:700;font-size:11px;color:var(--gn)">₹${bhav.putNet}/unit</div>
-          <div style="color:var(--muted);font-size:7px;margin-top:1px">${f(putBest.strike)}PE ₹${bhav.ps} − ${f(putBuy)}PE ₹${bhav.pb}</div>
-        </div>
+          <div style="color:var(--muted);font-size:7px;margin-top:1px">${f(putBest.strike)}PE ₹${bhav.ps} − ${f(putBuy)}PE ₹${bhav.pb}</div></div>
       </div>
       <div style="border-top:1px solid rgba(0,180,255,0.15);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;align-items:center">
         <div style="font-size:8px;color:var(--muted)">Actual IC total</div>
         <div style="font-family:var(--font-mono);font-weight:800;font-size:13px;color:var(--tl)">₹${bhav.total}/unit = ${fv(exitCredit)}</div>
       </div>
-      ${bhav.total < icMidUnit * 0.6 ? `<div style="font-size:7.5px;color:var(--am);margin-top:4px">⚠️ Actual lower than model — market compressed. Use bhav figure for exits.</div>` : ''}
-      ${bhav.total > icMidUnit * 1.4 ? `<div style="font-size:7.5px;color:var(--gn);margin-top:4px">✅ Actual higher than model — elevated IV. Favourable entry.</div>` : ''}
-    </div>
-    ` : `
+      ${bhav.total < icMidUnit*0.6 ? `<div style="font-size:7.5px;color:var(--am);margin-top:4px">⚠️ Actual lower than model — market compressed. Use bhav figure for exits.</div>` : ''}
+      ${bhav.total > icMidUnit*1.4 ? `<div style="font-size:7.5px;color:var(--gn);margin-top:4px">✅ Actual higher than model — elevated IV. Favourable entry.</div>` : ''}
+    </div>` : `
     <div style="font-size:7.5px;color:var(--muted);text-align:center;padding:5px 0 2px;border-top:1px solid var(--border);margin-top:4px">
       📊 Upload bhav copy in Smarts tab for actual market premiums · Using model estimate
-    </div>
-    `}
-
-    <!-- Key numbers strip -->
+    </div>`}
     <div class="cmd-stats">
-      <div class="cmd-stat">
-        <div class="cmd-stat-lbl">Lots · Lot sz</div>
-        <div class="cmd-stat-val" style="color:var(--tl)">${cm.safeLots} × ${NF_LOT_SIZE}</div>
-      </div>
-      <div class="cmd-stat">
-        <div class="cmd-stat-lbl">R:R · Win%</div>
-        <div class="cmd-stat-val" style="color:var(--am)">${Math.min(callRR,putRR).toFixed(1)} · ${Math.round((callWP+putWP)/2)}%</div>
-      </div>
-      <div class="cmd-stat">
-        <div class="cmd-stat-lbl">Max Loss</div>
-        <div class="cmd-stat-val" style="color:var(--rd)">${fv(icMaxL)}</div>
-      </div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Lots · Lot sz</div><div class="cmd-stat-val" style="color:var(--tl)">${cm.safeLots} × ${NF_LOT_SIZE}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">R:R · Win%</div><div class="cmd-stat-val" style="color:var(--am)">${Math.min(callRR,putRR).toFixed(1)} · ${Math.round((callWP+putWP)/2)}%</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Loss</div><div class="cmd-stat-val" style="color:var(--rd)">${fv(icMaxL)}</div></div>
     </div>
-
-    <!-- Capital strip -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)">
-      <div style="background:var(--bg3);padding:7px 8px;text-align:center">
-        <div style="font-size:6.5px;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Capital</div>
-        <div style="font-family:var(--font-mono);font-size:10px;font-weight:700">₹1L</div>
-      </div>
-      <div style="background:var(--bg3);padding:7px 8px;text-align:center">
-        <div style="font-size:6.5px;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Margin</div>
-        <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--tl)">${fv(cm.marginUsed)}</div>
-      </div>
-      <div style="background:var(--bg3);padding:7px 8px;text-align:center">
-        <div style="font-size:6.5px;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Buffer</div>
-        <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--gn)">${fv(cm.bufferLeft)}</div>
-      </div>
-      <div style="background:${cm.riskFlag?'rgba(200,33,62,0.1)':'var(--bg3)'};padding:7px 8px;text-align:center;border:${cm.riskFlag?'1px solid rgba(200,33,62,0.4)':'none'}">
-        <div style="font-size:6.5px;letter-spacing:0.8px;color:${cm.riskFlag?'var(--rd)':'var(--muted)'};text-transform:uppercase;margin-bottom:2px">SL Risk</div>
-        <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:${cm.riskFlag?'var(--rd)':'var(--am)'}">${cm.slPct.toFixed(1)}%${cm.riskFlag?' ⚠️':''}</div>
-      </div>
+      <div style="background:var(--bg3);padding:7px 8px;text-align:center"><div style="font-size:6.5px;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Capital</div><div style="font-family:var(--font-mono);font-size:10px;font-weight:700">₹1.1L</div></div>
+      <div style="background:var(--bg3);padding:7px 8px;text-align:center"><div style="font-size:6.5px;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Margin</div><div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--tl)">${fv(cm.marginUsed)}</div></div>
+      <div style="background:var(--bg3);padding:7px 8px;text-align:center"><div style="font-size:6.5px;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Buffer</div><div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--gn)">${fv(cm.bufferLeft)}</div></div>
+      <div style="background:${cm.riskFlag?'rgba(200,33,62,0.1)':'var(--bg3)'};padding:7px 8px;text-align:center"><div style="font-size:6.5px;letter-spacing:0.8px;color:${cm.riskFlag?'var(--rd)':'var(--muted)'};text-transform:uppercase;margin-bottom:2px">SL Risk</div><div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:${cm.riskFlag?'var(--rd)':'var(--am)'}">${cm.slPct.toFixed(1)}%${cm.riskFlag?' ⚠️':''}</div></div>
     </div>
-
-    <!-- EXIT RULES — bold and clear -->
     <div class="cmd-exits">
-      <div class="cmd-exit profit">
-        <div class="cmd-exit-lbl">✅ Take Profit</div>
-        <div class="cmd-exit-val" style="color:var(--gn)">${fv(exitCredit*0.40)}</div>
-        <div style="font-size:7.5px;color:var(--muted);margin-top:2px">40% of ${bhav?'actual':'est.'} credit${bhav?' (bhav)':''}</div>
+      <div class="cmd-exit profit"><div class="cmd-exit-lbl">✅ Take Profit</div><div class="cmd-exit-val" style="color:var(--gn)">${fv(exitCredit*0.40)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">40% of ${bhav?'actual':'est.'} credit</div></div>
+      <div class="cmd-exit loss"><div class="cmd-exit-lbl">🛑 Stop Loss</div><div class="cmd-exit-val" style="color:var(--rd)">${fv(exitCredit*0.80)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">80% of credit — hard exit</div></div>
+    </div>
+    <div class="stress-strip">
+      <div class="stress-side"><div class="stress-scenario">Spot −5% → ${f(Math.round(down5))}</div><div class="stress-result ${putBreach?'breach':'safe'}">${putBreach?'⚠️ PUT BREACHED':'✅ Safe'}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">${putBreach?'Put side at risk of max loss':'Buffer: '+f(price-putBest.strike)+'pts'}</div></div>
+      <div class="stress-side"><div class="stress-scenario">Spot +5% → ${f(Math.round(up5))}</div><div class="stress-result ${callBreach?'breach':'safe'}">${callBreach?'⚠️ CALL BREACHED':'✅ Safe'}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">${callBreach?'Call side at risk of max loss':'Buffer: '+f(callBest.strike-price)+'pts'}</div></div>
+    </div>
+  </div>`;
+
+  // ── Bull Put Spread card (credit, bullish) ─────────────────
+  const renderBullPut = (isAlt) => {
+    const cn = isAlt ? 'var(--border)' : 'var(--gn-br)';
+    return `
+  <div class="cmd-card" style="${isAlt?'opacity:0.85':''}">
+    <div class="cmd-hdr">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="cmd-expiry" style="font-size:15px">${bestExp.label}</div>
+          ${isAlt ? '<span class="tag fl" style="font-size:7px">ALTERNATIVE</span>' : '<span class="tag up" style="font-size:7px">✅ PRIMARY</span>'}
+        </div>
+        <div class="cmd-dte">${bestExp.dte} DTE · BULL PUT SPREAD · Net Credit</div>
       </div>
-      <div class="cmd-exit loss">
-        <div class="cmd-exit-lbl">🛑 Stop Loss</div>
-        <div class="cmd-exit-val" style="color:var(--rd)">${fv(exitCredit*0.80)}</div>
-        <div style="font-size:7.5px;color:var(--muted);margin-top:2px">80% of ${bhav?'actual':'est.'} credit — hard exit</div>
+      <div class="cmd-credit-box">
+        <div class="cmd-credit-lbl">CREDIT</div>
+        <div class="cmd-credit-val" style="font-size:18px">${fv(putMid*NF_LOT_SIZE*cm.safeLots)}</div>
+        <div class="cmd-credit-range">₹${putMin}–${putMax}/unit</div>
+      </div>
+    </div>
+    <div style="padding:12px 14px">
+      <div style="margin-bottom:10px">
+        <div style="font-size:8px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:5px">LEGS</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+          <span style="font-size:9px;font-weight:700;color:var(--gn);width:40px">SELL</span>
+          <span style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(putBest.strike)} PE</span>
+          ${mnBadge(putSellMn)}
+          <span style="font-size:8px;color:var(--gn);margin-left:auto">+₹${putMin}–${putMax}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:9px;font-weight:700;color:var(--muted);width:40px">BUY</span>
+          <span style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(putBuy)} PE</span>
+          ${mnBadge(putBuyMn)}
+          <span style="font-size:8px;color:var(--muted);margin-left:auto">hedge</span>
+        </div>
+      </div>
+      <div style="font-size:8px;color:${putBest.isOI?'var(--am)':'var(--muted)'};margin-bottom:8px">${putBest.isOI?'🎯 ':''}${putBest.reason} · ${putDist.toFixed(2)}×ATR</div>
+    </div>
+    <div class="cmd-stats">
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Profit</div><div class="cmd-stat-val" style="color:var(--gn)">${fv(putMid*NF_LOT_SIZE*cm.safeLots)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Loss</div><div class="cmd-stat-val" style="color:var(--rd)">${fv((width-putMid)*NF_LOT_SIZE*cm.safeLots)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">BEP</div><div class="cmd-stat-val" style="color:var(--am)">${f(putBest.strike - putMid)}</div></div>
+    </div>
+    <div class="cmd-exits">
+      <div class="cmd-exit profit"><div class="cmd-exit-lbl">✅ Take Profit</div><div class="cmd-exit-val" style="color:var(--gn)">${fv(putMid*NF_LOT_SIZE*cm.safeLots*0.40)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">40% of credit</div></div>
+      <div class="cmd-exit loss"><div class="cmd-exit-lbl">🛑 Stop Loss</div><div class="cmd-exit-val" style="color:var(--rd)">${fv(putMid*NF_LOT_SIZE*cm.safeLots*0.80)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">80% of credit</div></div>
+    </div>
+    <div style="padding:8px 14px;background:var(--bg3);font-size:8.5px;color:var(--muted)">💡 Win if Nifty stays above <strong style="color:var(--gn)">${f(putBest.strike - putMid)}</strong> by expiry · Profit intact below ${f(putBest.strike)}</div>
+  </div>`;};
+
+  // ── Bear Call Spread card (credit, bearish) ─────────────────
+  const renderBearCall = (isAlt) => `
+  <div class="cmd-card" style="${isAlt?'opacity:0.85':''}">
+    <div class="cmd-hdr">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="cmd-expiry" style="font-size:15px">${bestExp.label}</div>
+          ${isAlt ? '<span class="tag fl" style="font-size:7px">ALTERNATIVE</span>' : '<span class="tag dn" style="font-size:7px">✅ PRIMARY</span>'}
+        </div>
+        <div class="cmd-dte">${bestExp.dte} DTE · BEAR CALL SPREAD · Net Credit</div>
+      </div>
+      <div class="cmd-credit-box">
+        <div class="cmd-credit-lbl">CREDIT</div>
+        <div class="cmd-credit-val" style="font-size:18px">${fv(callMid*NF_LOT_SIZE*cm.safeLots)}</div>
+        <div class="cmd-credit-range">₹${callMin}–${callMax}/unit</div>
+      </div>
+    </div>
+    <div style="padding:12px 14px">
+      <div style="margin-bottom:10px">
+        <div style="font-size:8px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:5px">LEGS</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+          <span style="font-size:9px;font-weight:700;color:var(--rd);width:40px">SELL</span>
+          <span style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(callBest.strike)} CE</span>
+          ${mnBadge(callSellMn)}
+          <span style="font-size:8px;color:var(--gn);margin-left:auto">+₹${callMin}–${callMax}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:9px;font-weight:700;color:var(--muted);width:40px">BUY</span>
+          <span style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(callBuy)} CE</span>
+          ${mnBadge(callBuyMn)}
+          <span style="font-size:8px;color:var(--muted);margin-left:auto">hedge</span>
+        </div>
+      </div>
+      <div style="font-size:8px;color:${callBest.isOI?'var(--am)':'var(--muted)'};margin-bottom:8px">${callBest.isOI?'🎯 ':''}${callBest.reason} · ${callDist.toFixed(2)}×ATR</div>
+    </div>
+    <div class="cmd-stats">
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Profit</div><div class="cmd-stat-val" style="color:var(--gn)">${fv(callMid*NF_LOT_SIZE*cm.safeLots)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Loss</div><div class="cmd-stat-val" style="color:var(--rd)">${fv((width-callMid)*NF_LOT_SIZE*cm.safeLots)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">BEP</div><div class="cmd-stat-val" style="color:var(--am)">${f(callBest.strike + callMid)}</div></div>
+    </div>
+    <div class="cmd-exits">
+      <div class="cmd-exit profit"><div class="cmd-exit-lbl">✅ Take Profit</div><div class="cmd-exit-val" style="color:var(--gn)">${fv(callMid*NF_LOT_SIZE*cm.safeLots*0.40)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">40% of credit</div></div>
+      <div class="cmd-exit loss"><div class="cmd-exit-lbl">🛑 Stop Loss</div><div class="cmd-exit-val" style="color:var(--rd)">${fv(callMid*NF_LOT_SIZE*cm.safeLots*0.80)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">80% of credit</div></div>
+    </div>
+    <div style="padding:8px 14px;background:var(--bg3);font-size:8.5px;color:var(--muted)">💡 Win if Nifty stays below <strong style="color:var(--rd)">${f(callBest.strike + callMid)}</strong> by expiry · Profit intact above ${f(callBest.strike)}</div>
+  </div>`;
+
+  // ── Bull Call Spread card (debit, bullish) ──────────────────
+  const renderBullCall = (isAlt) => `
+  <div class="cmd-card" style="${isAlt?'opacity:0.85':''}">
+    <div class="cmd-hdr">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="cmd-expiry" style="font-size:15px">${bestExp.label}</div>
+          ${isAlt ? '<span class="tag fl" style="font-size:7px">ALTERNATIVE</span>' : '<span class="tag up" style="font-size:7px">✅ PRIMARY</span>'}
+        </div>
+        <div class="cmd-dte">${bestExp.dte} DTE · BULL CALL SPREAD · Net Debit</div>
+      </div>
+      <div class="cmd-credit-box">
+        <div class="cmd-credit-lbl">MAX PROFIT</div>
+        <div class="cmd-credit-val" style="font-size:18px;color:var(--am)">${fv(dsProfit)}</div>
+        <div class="cmd-credit-range" style="color:var(--muted)">debit ₹${ds.ndMin}–${ds.ndMax}/unit</div>
+      </div>
+    </div>
+    <div style="padding:12px 14px">
+      <div style="margin-bottom:10px">
+        <div style="font-size:8px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:5px">LEGS</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+          <span style="font-size:9px;font-weight:700;color:var(--tl);width:40px">BUY</span>
+          <span style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(bcsSellStrike)} CE</span>
+          ${mnBadge(atmMn)}
+          <span style="font-size:8px;color:var(--muted);margin-left:auto">pay premium</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:9px;font-weight:700;color:var(--muted);width:40px">SELL</span>
+          <span style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(bcsBuyStrike)} CE</span>
+          ${mnBadge(bcsOTMmn)}
+          <span style="font-size:8px;color:var(--gn);margin-left:auto">offset cost</span>
+        </div>
+      </div>
+      <div style="background:rgba(176,110,0,0.08);border:1px solid var(--am-br);border-radius:6px;padding:7px 10px;font-size:8.5px">
+        <span style="color:var(--am);font-weight:700">Net Debit: ₹${ds.netDebit}/unit</span>
+        <span style="color:var(--muted);margin-left:8px">Capital at risk: ${fv(dsDebit)}</span>
+      </div>
+    </div>
+    <div class="cmd-stats">
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Profit</div><div class="cmd-stat-val" style="color:var(--gn)">${fv(dsProfit)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Loss</div><div class="cmd-stat-val" style="color:var(--rd)">${fv(dsDebit)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">BEP</div><div class="cmd-stat-val" style="color:var(--am)">${f(dsBEPbull)}</div></div>
+    </div>
+    <div class="cmd-exits">
+      <div class="cmd-exit profit"><div class="cmd-exit-lbl">✅ Take Profit</div><div class="cmd-exit-val" style="color:var(--gn)">${fv(dsProfit*0.60)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">60% of max profit</div></div>
+      <div class="cmd-exit loss"><div class="cmd-exit-lbl">🛑 Stop Loss</div><div class="cmd-exit-val" style="color:var(--rd)">${fv(dsDebit*0.50)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">50% of debit paid</div></div>
+    </div>
+    <div style="padding:8px 14px;background:var(--bg3);font-size:8.5px;color:var(--muted)">💡 Profit if Nifty closes above <strong style="color:var(--gn)">${f(dsBEPbull)}</strong> · Max profit at ${f(bcsBuyStrike)} or above · Capital needed: ${fv(dsDebit)} only</div>
+  </div>`;
+
+  // ── Bear Put Spread card (debit, bearish) ───────────────────
+  const renderBearPut = (isAlt) => `
+  <div class="cmd-card" style="${isAlt?'opacity:0.85':''}">
+    <div class="cmd-hdr">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="cmd-expiry" style="font-size:15px">${bestExp.label}</div>
+          ${isAlt ? '<span class="tag fl" style="font-size:7px">ALTERNATIVE</span>' : '<span class="tag dn" style="font-size:7px">✅ PRIMARY</span>'}
+        </div>
+        <div class="cmd-dte">${bestExp.dte} DTE · BEAR PUT SPREAD · Net Debit</div>
+      </div>
+      <div class="cmd-credit-box">
+        <div class="cmd-credit-lbl">MAX PROFIT</div>
+        <div class="cmd-credit-val" style="font-size:18px;color:var(--am)">${fv(dsProfit)}</div>
+        <div class="cmd-credit-range" style="color:var(--muted)">debit ₹${ds.ndMin}–${ds.ndMax}/unit</div>
+      </div>
+    </div>
+    <div style="padding:12px 14px">
+      <div style="margin-bottom:10px">
+        <div style="font-size:8px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:5px">LEGS</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+          <span style="font-size:9px;font-weight:700;color:var(--tl);width:40px">BUY</span>
+          <span style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(bpsSellStrike)} PE</span>
+          ${mnBadge(atmMn)}
+          <span style="font-size:8px;color:var(--muted);margin-left:auto">pay premium</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:9px;font-weight:700;color:var(--muted);width:40px">SELL</span>
+          <span style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(bpsBuyStrike)} PE</span>
+          ${mnBadge(bpsOTMmn)}
+          <span style="font-size:8px;color:var(--gn);margin-left:auto">offset cost</span>
+        </div>
+      </div>
+      <div style="background:rgba(176,110,0,0.08);border:1px solid var(--am-br);border-radius:6px;padding:7px 10px;font-size:8.5px">
+        <span style="color:var(--am);font-weight:700">Net Debit: ₹${ds.netDebit}/unit</span>
+        <span style="color:var(--muted);margin-left:8px">Capital at risk: ${fv(dsDebit)}</span>
+      </div>
+    </div>
+    <div class="cmd-stats">
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Profit</div><div class="cmd-stat-val" style="color:var(--gn)">${fv(dsProfit)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Loss</div><div class="cmd-stat-val" style="color:var(--rd)">${fv(dsDebit)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">BEP</div><div class="cmd-stat-val" style="color:var(--am)">${f(dsBEPbear)}</div></div>
+    </div>
+    <div class="cmd-exits">
+      <div class="cmd-exit profit"><div class="cmd-exit-lbl">✅ Take Profit</div><div class="cmd-exit-val" style="color:var(--gn)">${fv(dsProfit*0.60)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">60% of max profit</div></div>
+      <div class="cmd-exit loss"><div class="cmd-exit-lbl">🛑 Stop Loss</div><div class="cmd-exit-val" style="color:var(--rd)">${fv(dsDebit*0.50)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">50% of debit paid</div></div>
+    </div>
+    <div style="padding:8px 14px;background:var(--bg3);font-size:8.5px;color:var(--muted)">💡 Profit if Nifty closes below <strong style="color:var(--rd)">${f(dsBEPbear)}</strong> · Max profit at ${f(bpsBuyStrike)} or below · Capital needed: ${fv(dsDebit)} only</div>
+  </div>`;
+
+  // ── Long Straddle + Strangle card (event play) ──────────────
+  const renderStraddle = () => `
+  <div class="cmd-card">
+    <div class="cmd-hdr">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="cmd-expiry" style="font-size:15px">${bestExp.label}</div>
+          <span class="tag pu" style="font-size:7px">⚡ EVENT</span>
+        </div>
+        <div class="cmd-dte">${bestExp.dte} DTE · ${eventFlag.toUpperCase()} · VIX ${vix} (very low IV)</div>
+      </div>
+      <div class="cmd-credit-box">
+        <div class="cmd-credit-lbl">STRADDLE COST</div>
+        <div class="cmd-credit-val" style="font-size:18px;color:var(--pu)">${fv(sdTotal)}</div>
+        <div class="cmd-credit-range" style="color:var(--muted)">₹${sd.min}–${sd.max}/unit</div>
       </div>
     </div>
 
-    <!-- Stress test -->
-    <div class="stress-strip">
-      <div class="stress-side">
-        <div class="stress-scenario">Spot −5% → ${f(Math.round(down5))}</div>
-        <div class="stress-result ${putBreach?'breach':'safe'}">${putBreach ? '⚠️ PUT BREACHED' : '✅ Safe'}</div>
-        <div style="font-size:7.5px;color:var(--muted);margin-top:2px">${putBreach ? 'Put side at risk of max loss' : `Buffer: ${f(price - putBest.strike)}pts`}</div>
+    <div style="margin:8px 14px 0;border-radius:6px;background:rgba(94,61,179,0.06);border:1px solid rgba(94,61,179,0.25);padding:10px 12px">
+      <div style="font-size:8px;font-weight:700;letter-spacing:1px;color:var(--pu);text-transform:uppercase;margin-bottom:6px">OPTION 1 — LONG STRADDLE (higher cost, closer BEP)</div>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <div style="flex:1;background:rgba(200,33,62,0.06);border:1px solid rgba(200,33,62,0.2);border-radius:6px;padding:8px 10px">
+          <div style="font-size:8px;font-weight:700;color:var(--rd);margin-bottom:3px">BUY CE</div>
+          <div style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(atmStrike)} CE</div>
+          ${mnBadge(atmMn)}
+        </div>
+        <div style="flex:1;background:rgba(0,127,95,0.06);border:1px solid rgba(0,127,95,0.2);border-radius:6px;padding:8px 10px">
+          <div style="font-size:8px;font-weight:700;color:var(--gn);margin-bottom:3px">BUY PE</div>
+          <div style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(atmStrike)} PE</div>
+          ${mnBadge(atmMn)}
+        </div>
       </div>
-      <div class="stress-side">
-        <div class="stress-scenario">Spot +5% → ${f(Math.round(up5))}</div>
-        <div class="stress-result ${callBreach?'breach':'safe'}">${callBreach ? '⚠️ CALL BREACHED' : '✅ Safe'}</div>
-        <div style="font-size:7.5px;color:var(--muted);margin-top:2px">${callBreach ? 'Call side at risk of max loss' : `Buffer: ${f(callBest.strike - price)}pts`}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:9px">
+        <div style="background:var(--bg3);border-radius:5px;padding:5px 8px;text-align:center">
+          <div style="font-size:7px;color:var(--muted)">TOTAL COST</div>
+          <div style="font-family:var(--font-mono);font-weight:700;color:var(--pu)">${fv(sdTotal)}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:5px;padding:5px 8px;text-align:center">
+          <div style="font-size:7px;color:var(--muted)">BEP ↑</div>
+          <div style="font-family:var(--font-mono);font-weight:700;color:var(--gn)">${f(atmStrike + sd.unit)}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:5px;padding:5px 8px;text-align:center">
+          <div style="font-size:7px;color:var(--muted)">BEP ↓</div>
+          <div style="font-family:var(--font-mono);font-weight:700;color:var(--rd)">${f(atmStrike - sd.unit)}</div>
+        </div>
       </div>
+    </div>
+
+    <div style="margin:8px 14px 0;border-radius:6px;background:rgba(0,110,150,0.06);border:1px solid rgba(0,110,150,0.25);padding:10px 12px">
+      <div style="font-size:8px;font-weight:700;letter-spacing:1px;color:var(--tl);text-transform:uppercase;margin-bottom:6px">OPTION 2 — LONG STRANGLE (cheaper, wider BEP)</div>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <div style="flex:1;background:rgba(200,33,62,0.06);border:1px solid rgba(200,33,62,0.2);border-radius:6px;padding:8px 10px">
+          <div style="font-size:8px;font-weight:700;color:var(--rd);margin-bottom:3px">BUY OTM CE</div>
+          <div style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(stgCE)} CE</div>
+          ${mnBadge(stgCEmn)}
+        </div>
+        <div style="flex:1;background:rgba(0,127,95,0.06);border:1px solid rgba(0,127,95,0.2);border-radius:6px;padding:8px 10px">
+          <div style="font-size:8px;font-weight:700;color:var(--gn);margin-bottom:3px">BUY OTM PE</div>
+          <div style="font-family:var(--font-mono);font-size:14px;font-weight:800">${f(stgPE)} PE</div>
+          ${mnBadge(stgPEmn)}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:9px">
+        <div style="background:var(--bg3);border-radius:5px;padding:5px 8px;text-align:center">
+          <div style="font-size:7px;color:var(--muted)">TOTAL COST</div>
+          <div style="font-family:var(--font-mono);font-weight:700;color:var(--tl)">${fv(stgTotal)}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:5px;padding:5px 8px;text-align:center">
+          <div style="font-size:7px;color:var(--muted)">BEP ↑</div>
+          <div style="font-family:var(--font-mono);font-weight:700;color:var(--gn)">${f(stgCE + stgUnit)}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:5px;padding:5px 8px;text-align:center">
+          <div style="font-size:7px;color:var(--muted)">BEP ↓</div>
+          <div style="font-family:var(--font-mono);font-weight:700;color:var(--rd)">${f(stgPE - stgUnit)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin:8px 14px;background:rgba(94,61,179,0.06);border-radius:6px;padding:8px 12px">
+      <div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:var(--pu);margin-bottom:4px">CHOOSE BASED ON COST</div>
+      <div style="font-size:8.5px;color:var(--muted);line-height:1.7">
+        📊 Straddle ${fv(sdTotal)} saves ${f(stgCE+stgUnit)}–${f(atmStrike+sd.unit)} gap on upper BEP but costs more.<br>
+        📊 Strangle ${fv(stgTotal)} cheaper by ${fv(sdTotal-stgTotal)} but needs bigger move to profit.<br>
+        ⚡ Event must cause a move bigger than BEP distance to profit. Both lose max if market flat.
+      </div>
+    </div>
+    <div style="padding:8px 14px;background:rgba(94,61,179,0.06);border-top:1px solid var(--border);font-size:8.5px;color:var(--am);font-weight:600">
+      ⚠️ Enter only if major event today/tomorrow. Exit same day if possible — theta kills debit plays on weekly options.
+    </div>
+  </div>`;
+
+  // ══════════════════════════════════════════════════════════
+  // MAIN RENDER
+  // ══════════════════════════════════════════════════════════
+
+  // Select primary card renderer
+  const primaryCard = () => {
+    switch(primaryStrat) {
+      case 'IC':           return renderIC();
+      case 'BULL_PUT':     return renderBullPut(false);
+      case 'BULL_CALL':    return renderBullCall(false);
+      case 'BEAR_CALL':    return renderBearCall(false);
+      case 'BEAR_PUT':     return renderBearPut(false);
+      case 'STRADDLE':     return renderStraddle();
+      default: return '';
+    }
+  };
+
+  // Select alternative card renderer (collapsed)
+  const altCard = () => {
+    if (!altStrat) return '';
+    switch(altStrat) {
+      case 'IC':           return renderIC();
+      case 'BULL_PUT':     return renderBullPut(true);
+      case 'BULL_CALL':    return renderBullCall(true);
+      case 'BEAR_CALL':    return renderBearCall(true);
+      case 'BEAR_PUT':     return renderBearPut(true);
+      case 'STRADDLE':     return renderStraddle();
+      default: return '';
+    }
+  };
+
+  const altLabel = () => {
+    if (!altStrat) return '';
+    const names = {IC:'Iron Condor',BULL_PUT:'Bull Put Spread',BULL_CALL:'Bull Call Spread',BEAR_CALL:'Bear Call Spread',BEAR_PUT:'Bear Put Spread',STRADDLE:'Straddle/Strangle'};
+    return names[altStrat] || altStrat;
+  };
+
+  out.innerHTML = `
+
+  <!-- GO/NO-GO Banner -->
+  <div class="go-banner ${goState}">
+    <div class="go-icon">${goIcon}</div>
+    <div>
+      <div class="go-status" style="color:${goState==='go'?'var(--gn)':goState==='caution'?'var(--am)':'var(--rd)'}">${goLabel}</div>
+      <div class="go-reason">${goReason}</div>
     </div>
   </div>
 
+  ${primaryStrat === 'AVOID' ? `
+  <div style="margin:10px 14px 0;background:var(--bg2);border-radius:var(--r);padding:14px;border:1px solid var(--border)">
+    <div style="font-size:10px;color:var(--muted);line-height:1.8">
+      ${bestExp ? `📅 Next tradeable expiry: <strong style="color:var(--text)">${bestExp.label} (${bestExp.dte} DTE)</strong>` : ''}
+      <br>⏰ Come back when conditions improve — check VERDICT tab for score trend.
+      ${maxPainNote ? `<br>📍 ${maxPainNote}` : ''}
+    </div>
+  </div>
+  ` : `
+  ${primaryCard()}
+
+  ${altStrat ? `
+  <div class="alt-section" id="alt-strat-section" style="margin:8px 14px 0">
+    <div class="alt-toggle" onclick="this.closest('.alt-section').classList.toggle('open')">
+      <div class="alt-toggle-lbl">📋 Alternative: ${altLabel()}</div>
+      <div class="alt-toggle-chevron">▼</div>
+    </div>
+    <div class="alt-body" style="padding-top:4px">${altCard()}</div>
+  </div>
+  ` : ''}
   `}
 
   <!-- VIX + Market Context strip -->
@@ -1243,10 +1679,14 @@ function buildCommand() {
       <div class="vix-track"><div class="vix-fill" style="width:${vixPct}%;background:${vixColor}"></div></div>
       <div class="vix-val" style="color:${vixColor}">${vix}</div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px">
       <div style="background:var(--bg3);border-radius:5px;padding:6px 8px;text-align:center">
         <div style="font-size:7px;color:var(--muted);letter-spacing:0.5px">SCORE</div>
-        <div style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:${score>=0.4?'var(--gn)':score<=-0.4?'var(--rd)':'var(--am)'}">${score>=0?'+':''}${score.toFixed(2)}</div>
+        <div style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:${score>=0.25?'var(--gn)':score<=-0.25?'var(--rd)':'var(--am)'}">${score>=0?'+':''}${score.toFixed(2)}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:5px;padding:6px 8px;text-align:center">
+        <div style="font-size:7px;color:var(--muted);letter-spacing:0.5px">DIRECTION</div>
+        <div style="font-family:var(--font-mono);font-size:8px;font-weight:700;color:${isBull?'var(--gn)':isBear?'var(--rd)':'var(--am)'}">${dirCat.replace('_',' ')}</div>
       </div>
       <div style="background:var(--bg3);border-radius:5px;padding:6px 8px;text-align:center">
         <div style="font-size:7px;color:var(--muted);letter-spacing:0.5px">BEST DTE</div>
@@ -1257,6 +1697,7 @@ function buildCommand() {
         <div style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:${pcr?pcr>=1.2?'var(--gn)':pcr>=0.85?'var(--am)':'var(--rd)':'var(--muted)'}">${pcr ? pcr.toFixed(2) : '—'}</div>
       </div>
     </div>
+    ${maxPainNote ? `<div style="font-size:8.5px;color:var(--am);margin-top:6px">📍 ${maxPainNote}</div>` : ''}
   </div>
 
   <!-- BNF Viability -->
@@ -1272,39 +1713,38 @@ function buildCommand() {
     ${bnfViz.state !== 'avoid' && bnfPrice && bnfAtr ? buildBNFCommandCard(bnfViz.state, bnfPrice, bnfAtr, vix, score, bnfPcr, gv('bn_oi_call'), gv('bn_oi_put')) : ''}
   </div>
 
-  <!-- Alternatives — collapsed -->
+  <!-- Other expiries — collapsed -->
   <div class="alt-section" id="alt-section">
     <div class="alt-toggle" onclick="toggleAlt()">
       <div class="alt-toggle-lbl">📋 Other expiries & details</div>
       <div class="alt-toggle-chevron">▼</div>
     </div>
     <div class="alt-body">
-      ${expiries.map((exp, i) => {
-        if (exp.dte === (bestExp?.dte)) return '';  // skip the one already shown
-        const cB2 = bestStrike(price, atr, exp.dte, vix, true,  oiCall, pcr, true);
-        const pB2 = bestStrike(price, atr, exp.dte, vix, false, oiPut,  pcr, true);
+      ${expiries.map((exp) => {
+        if (exp.dte === (bestExp?.dte)) return '';
+        const cB2  = bestStrike(price, atr, exp.dte, vix, true,  oiCall, pcr, true);
+        const pB2  = bestStrike(price, atr, exp.dte, vix, false, oiPut,  pcr, true);
         const cBuy2 = r50(cB2.strike+width), pBuy2 = r50(pB2.strike-width);
-        const pa2 = pcrPremAdj(pcr,exp.dte);
-        const cr2 = estimateCredit(width,exp.dte,vix,true);
-        const cD2 = (cB2.strike-price)/atr, pD2 = (price-pB2.strike)/atr;
-        const cM2 = Math.min(r5(cr2.midCall*distFactorCall(cD2,exp.dte)/Math.max(pa2,1)),r5(width*0.68));
-        const pM2 = Math.min(r5(cr2.mid*distFactor(pD2)*pa2),r5(width*0.68));
-        const ic2 = (cM2+pM2)*NF_LOT_SIZE*cm.safeLots;
+        const pa2   = pcrPremAdj(pcr,exp.dte);
+        const cr2   = estimateCredit(width,exp.dte,vix,true);
+        const cD2   = (cB2.strike-price)/atr, pD2 = (price-pB2.strike)/atr;
+        const cM2   = Math.min(r5(cr2.midCall*distFactorCall(cD2,exp.dte)/Math.max(pa2,1)),r5(width*0.68));
+        const pM2   = Math.min(r5(cr2.mid*distFactor(pD2)*pa2),r5(width*0.68));
+        const ic2   = (cM2+pM2)*NF_LOT_SIZE*cm.safeLots;
         const conv2 = dteConviction(exp.dte);
         const dteOk = exp.dte>=6 && exp.dte<=21;
+        const cM2mn = moneyness(cB2.strike, price, true);
+        const pM2mn = moneyness(pB2.strike, price, false);
         return `<div style="margin:4px 0;background:var(--bg2);border-radius:6px;border:1px solid var(--border);padding:10px 14px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <div>
-              <div style="font-family:var(--font-mono);font-size:14px;font-weight:700">${exp.label}</div>
-              <div style="font-size:8px;color:var(--muted)">${exp.dte} DTE · ${exp.type}</div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:8px;color:var(--muted)">Est IC</div>
-              <div style="font-family:var(--font-mono);font-size:14px;font-weight:700;color:${dteOk?'var(--gn)':'var(--muted)'}">${fv(ic2)}</div>
-            </div>
+            <div><div style="font-family:var(--font-mono);font-size:14px;font-weight:700">${exp.label}</div>
+              <div style="font-size:8px;color:var(--muted)">${exp.dte} DTE · ${exp.type}</div></div>
+            <div style="text-align:right"><div style="font-size:8px;color:var(--muted)">Est IC</div>
+              <div style="font-family:var(--font-mono);font-size:14px;font-weight:700;color:${dteOk?'var(--gn)':'var(--muted)'}">${fv(ic2)}</div></div>
           </div>
           <div style="font-size:8.5px;color:var(--muted)">
-            Sell ${f(cB2.strike)} CE / ${f(pB2.strike)} PE · Buy ${f(cBuy2)} CE / ${f(pBuy2)} PE
+            Sell ${f(cB2.strike)} CE ${mnBadge(cM2mn)} / ${f(pB2.strike)} PE ${mnBadge(pM2mn)}<br>
+            Buy  ${f(cBuy2)} CE / ${f(pBuy2)} PE
           </div>
           <div style="font-size:8px;margin-top:3px;color:${conv2.cls==='opt'?'var(--gn)':conv2.cls==='near'?'var(--rd)':'var(--am)'}">${conv2.label} — ${conv2.note}</div>
         </div>`;
@@ -1314,7 +1754,6 @@ function buildCommand() {
 
   `;
 
-  // Also update old output areas for compat
   const oldNF = document.getElementById('nf-multi-output');
   if (oldNF) oldNF.innerHTML = '';
 }
@@ -1687,7 +2126,7 @@ function saveState(){
   const allFlds=['sp500','dow','usvix','nk','hsi','crude','gold','inr','yld',
     'gift_now','nifty_prev','gift_6am','india_vix','fii','fii_fut','fii_opt','dii',
     'max_pain_nf','max_pain_bn','close_char','n50adv','n50dma','bnfadv',
-    'nf_price','nf_atr','pcr_nf','nf_lot','nf_lots','nf_oi_call','nf_oi_put','nf_maxpain',
+    'nf_price','nf_atr','pcr_nf','nf_lot','nf_lots','nf_oi_call','nf_oi_put','nf_maxpain','event_flag',
     'bn_price','bn_atr','pcr_bn','bn_lot','bn_lots','bn_oi_call','bn_oi_put','bn_maxpain'];
   const s={};
   allFlds.forEach(f=>{ const e=document.getElementById(f); if(e) s[f]=e.value; });
