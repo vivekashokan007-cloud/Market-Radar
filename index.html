@@ -22,7 +22,7 @@
 <header>
   <div>
     <div class="hlogo">MARKET RADAR
-      <span>OPTIONS INTELLIGENCE · NSE V2.1.0</span>
+      <span>OPTIONS INTELLIGENCE · NSE V2.2.0</span>
     </div>
   </div>
   <div class="hright">
@@ -395,7 +395,7 @@
 
 </div><!-- /p2 -->
 
-<!-- ═══════════════ PANEL 3: STRATEGY v1.8.0 ═══════════════ -->
+<!-- ═══════════════ PANEL 3: STRATEGY v2.2.0 ═══════════════ -->
 <div class="panel" id="p3">
 
   <!-- Entry Time Signal -->
@@ -410,99 +410,133 @@
     </div>
   </div>
 
-  <!-- ═══ COMMAND OUTPUT — auto-rendered ═══ -->
-  <div id="cmd-output"></div>
+  <!-- ═══ INPUTS — always on top ═══ -->
+  <div style="margin:10px 14px 0;background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;">
 
-  <!-- ═══ INPUTS (always visible, compact) ═══ -->
-  <div style="margin:14px 14px 0;border-top:2px solid var(--border);padding-top:12px;">
-    <div style="font-size:8px;font-weight:700;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">📥 NIFTY 50 INPUTS</div>
-    <div class="igrid" style="margin:0">
-      <div class="igrid-item">
-        <div class="igrid-label">Spot Price</div>
-        <input class="igrid-input" id="nf_price" type="text" inputmode="decimal" placeholder="25471" oninput="buildCommand()">
+    <!-- Section header -->
+    <div style="background:var(--bg3);padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--text);text-transform:uppercase;">📥 Market Inputs</div>
+        <div style="font-size:8px;color:var(--muted);margin-top:1px;">Fill all fields · then tap Analyse</div>
       </div>
-      <div class="igrid-item">
-        <div class="igrid-label">ATR (14-day)</div>
-        <input class="igrid-input" id="nf_atr" type="text" inputmode="decimal" placeholder="250" oninput="buildCommand()">
-      </div>
-      <div class="igrid-item">
-        <div class="igrid-label">NF PCR</div>
-        <input class="igrid-input" id="pcr_nf" type="text" inputmode="decimal" placeholder="1.15" oninput="buildCommand();stampField('pcr_nf')">
-        <div class="igrid-ts" id="ts-pcr_nf"></div>
-      </div>
-      <div class="igrid-item">
-        <div class="igrid-label">Max Pain NF</div>
-        <input class="igrid-input" id="nf_maxpain" type="text" inputmode="decimal" placeholder="25300" oninput="buildCommand();stampField('nf_maxpain')">
-        <div class="igrid-ts" id="ts-nf_maxpain"></div>
-      </div>
-    </div>
-    <div class="igrid" style="margin:4px 0 0">
-      <div class="igrid-item">
-        <div class="igrid-label">Call OI Wall</div>
-        <input class="igrid-input" id="nf_oi_call" type="text" inputmode="decimal" placeholder="25700" oninput="buildCommand();stampField('nf_oi_call')">
-        <div class="igrid-ts" id="ts-nf_oi_call"></div>
-      </div>
-      <div class="igrid-item">
-        <div class="igrid-label">Put OI Wall</div>
-        <input class="igrid-input" id="nf_oi_put" type="text" inputmode="decimal" placeholder="25200" oninput="buildCommand();stampField('nf_oi_put')">
-        <div class="igrid-ts" id="ts-nf_oi_put"></div>
-      </div>
+      <div id="strat-analysed-ts" style="font-size:7.5px;color:var(--muted);font-family:var(--font-mono);text-align:right;"></div>
     </div>
 
-    <!-- Event flag — drives straddle/strangle recommendation -->
-    <div style="margin:8px 0 0;background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:10px 12px;display:flex;align-items:center;gap:10px">
-      <div style="flex:1">
-        <div style="font-size:8px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Major Event Today / Tomorrow</div>
-        <div style="font-size:8px;color:var(--muted)">Enables Long Straddle/Strangle when VIX &lt; 12</div>
+    <!-- NF inputs -->
+    <div style="padding:10px 14px 0;">
+      <div style="font-size:7.5px;font-weight:700;letter-spacing:1.5px;color:var(--tl);text-transform:uppercase;margin-bottom:6px;">NIFTY 50</div>
+      <div class="igrid" style="margin:0;">
+        <div class="igrid-item">
+          <div class="igrid-label">Spot Price</div>
+          <input class="igrid-input" id="nf_price" type="text" inputmode="decimal" placeholder="25471">
+        </div>
+        <div class="igrid-item">
+          <div class="igrid-label">ATR (14-day)</div>
+          <input class="igrid-input" id="nf_atr" type="text" inputmode="decimal" placeholder="250">
+        </div>
+        <div class="igrid-item">
+          <div class="igrid-label">NF PCR</div>
+          <input class="igrid-input" id="pcr_nf" type="text" inputmode="decimal" placeholder="1.15" oninput="stampField('pcr_nf')">
+          <div class="igrid-ts" id="ts-pcr_nf"></div>
+        </div>
+        <div class="igrid-item">
+          <div class="igrid-label">Max Pain NF</div>
+          <input class="igrid-input" id="nf_maxpain" type="text" inputmode="decimal" placeholder="25300" oninput="stampField('nf_maxpain')">
+          <div class="igrid-ts" id="ts-nf_maxpain"></div>
+        </div>
+        <div class="igrid-item">
+          <div class="igrid-label">Call OI Wall</div>
+          <input class="igrid-input" id="nf_oi_call" type="text" inputmode="decimal" placeholder="25700" oninput="stampField('nf_oi_call')">
+          <div class="igrid-ts" id="ts-nf_oi_call"></div>
+        </div>
+        <div class="igrid-item">
+          <div class="igrid-label">Put OI Wall</div>
+          <input class="igrid-input" id="nf_oi_put" type="text" inputmode="decimal" placeholder="25200" oninput="stampField('nf_oi_put')">
+          <div class="igrid-ts" id="ts-nf_oi_put"></div>
+        </div>
       </div>
-      <select class="igrid-input" id="event_flag" style="width:130px;font-size:10px" onchange="buildCommand()">
-        <option value="none">None</option>
-        <option value="rbi">RBI Policy</option>
-        <option value="budget">Union Budget</option>
-        <option value="expiry">Expiry Week</option>
-        <option value="earnings">Major Earnings</option>
-        <option value="other">Other Major</option>
-      </select>
     </div>
-  </div>
 
-  <!-- BNF inputs — compact, always below -->
-  <div style="margin:10px 14px 0;border-top:1px solid var(--border);padding-top:12px;">
-    <div style="font-size:8px;font-weight:700;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">🏦 BANK NIFTY INPUTS <span style="font-size:7px;font-weight:400">(optional — for BNF viability)</span></div>
-    <div class="igrid" style="margin:0">
-      <div class="igrid-item">
-        <div class="igrid-label">BNF Spot</div>
-        <input class="igrid-input" id="bn_price" type="text" inputmode="decimal" placeholder="61000" oninput="buildCommand()">
-      </div>
-      <div class="igrid-item">
-        <div class="igrid-label">BNF ATR</div>
-        <input class="igrid-input" id="bn_atr" type="text" inputmode="decimal" placeholder="600" oninput="buildCommand()">
-      </div>
-      <div class="igrid-item">
-        <div class="igrid-label">BNF PCR</div>
-        <input class="igrid-input" id="pcr_bn" type="text" inputmode="decimal" placeholder="1.35" oninput="buildCommand();stampField('pcr_bn')">
-        <div class="igrid-ts" id="ts-pcr_bn"></div>
-      </div>
-      <div class="igrid-item">
-        <div class="igrid-label">Max Pain BNF</div>
-        <input class="igrid-input" id="bn_maxpain" type="text" inputmode="decimal" placeholder="60500" oninput="buildCommand()">
-      </div>
-    </div>
-    <div class="igrid" style="margin:4px 0 0">
-      <div class="igrid-item">
-        <div class="igrid-label">Call OI Wall</div>
-        <input class="igrid-input" id="bn_oi_call" type="text" inputmode="decimal" placeholder="62000" oninput="buildCommand();stampField('bn_oi_call')">
-        <div class="igrid-ts" id="ts-bn_oi_call"></div>
-      </div>
-      <div class="igrid-item">
-        <div class="igrid-label">Put OI Wall</div>
-        <input class="igrid-input" id="bn_oi_put" type="text" inputmode="decimal" placeholder="60000" oninput="buildCommand();stampField('bn_oi_put')">
-        <div class="igrid-ts" id="ts-bn_oi_put"></div>
+    <!-- VIX override + Event flag row -->
+    <div style="padding:8px 14px 0;">
+      <div class="igrid" style="margin:0;">
+        <div class="igrid-item" style="background:rgba(0,110,150,0.06);border:1px solid rgba(0,110,150,0.2);">
+          <div class="igrid-label" style="color:var(--tl);">Live VIX <span style="font-weight:400;color:var(--muted)">(override)</span></div>
+          <input class="igrid-input" id="strat_vix" type="text" inputmode="decimal" placeholder="from Radar">
+          <div style="font-size:7px;color:var(--muted);margin-top:2px;">Leave blank → uses Radar VIX</div>
+        </div>
+        <div class="igrid-item">
+          <div class="igrid-label">Major Event</div>
+          <select class="igrid-input" id="event_flag" style="font-size:10px;">
+            <option value="none">None</option>
+            <option value="rbi">RBI Policy</option>
+            <option value="budget">Union Budget</option>
+            <option value="expiry">Expiry Week</option>
+            <option value="earnings">Major Earnings</option>
+            <option value="other">Other Major</option>
+          </select>
+          <div style="font-size:7px;color:var(--muted);margin-top:2px;">Enables straddle if VIX &lt; 12</div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- hidden compat elements for old saveState refs -->
+    <!-- BNF inputs — collapsible -->
+    <div style="padding:8px 14px 0;">
+      <div style="font-size:7.5px;font-weight:700;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('bnf-input-body').style.display=document.getElementById('bnf-input-body').style.display==='none'?'block':'none'">
+        🏦 BANK NIFTY <span style="font-weight:400;">(optional · tap to expand)</span>
+      </div>
+      <div id="bnf-input-body" style="display:none;">
+        <div class="igrid" style="margin:0 0 8px;">
+          <div class="igrid-item">
+            <div class="igrid-label">BNF Spot</div>
+            <input class="igrid-input" id="bn_price" type="text" inputmode="decimal" placeholder="61000">
+          </div>
+          <div class="igrid-item">
+            <div class="igrid-label">BNF ATR</div>
+            <input class="igrid-input" id="bn_atr" type="text" inputmode="decimal" placeholder="600">
+          </div>
+          <div class="igrid-item">
+            <div class="igrid-label">BNF PCR</div>
+            <input class="igrid-input" id="pcr_bn" type="text" inputmode="decimal" placeholder="1.35" oninput="stampField('pcr_bn')">
+            <div class="igrid-ts" id="ts-pcr_bn"></div>
+          </div>
+          <div class="igrid-item">
+            <div class="igrid-label">Max Pain BNF</div>
+            <input class="igrid-input" id="bn_maxpain" type="text" inputmode="decimal" placeholder="60500">
+          </div>
+          <div class="igrid-item">
+            <div class="igrid-label">Call OI Wall</div>
+            <input class="igrid-input" id="bn_oi_call" type="text" inputmode="decimal" placeholder="62000" oninput="stampField('bn_oi_call')">
+            <div class="igrid-ts" id="ts-bn_oi_call"></div>
+          </div>
+          <div class="igrid-item">
+            <div class="igrid-label">Put OI Wall</div>
+            <input class="igrid-input" id="bn_oi_put" type="text" inputmode="decimal" placeholder="60000" oninput="stampField('bn_oi_put')">
+            <div class="igrid-ts" id="ts-bn_oi_put"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANALYSE button -->
+    <div style="padding:12px 14px;">
+      <button onclick="runAnalysis()"
+        style="width:100%;padding:14px;background:var(--tl);color:#fff;border:none;border-radius:8px;
+               font-family:var(--font-sans);font-size:13px;font-weight:700;letter-spacing:1px;
+               cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+        ⚡ ANALYSE — GET STRATEGY
+      </button>
+      <div style="font-size:8px;color:var(--muted);text-align:center;margin-top:6px;">
+        Combines Radar score + live inputs → optimal strategy
+      </div>
+    </div>
+
+  </div><!-- /inputs card -->
+
+  <!-- ═══ COMMAND OUTPUT — rendered after Analyse ═══ -->
+  <div id="cmd-output" style="margin-top:4px;"></div>
+
+  <!-- hidden compat elements -->
   <input type="hidden" id="nf-multi-output-compat">
   <input type="hidden" id="bn-multi-output-compat">
 

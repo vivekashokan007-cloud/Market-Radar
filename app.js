@@ -5,22 +5,19 @@
 // ══════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════
-// MARKET RADAR v2.1.0
-// v2.0.2: getExpiries Monday fix, icMaxL bug fix, bhavATR label.
-// v2.1.0: 7-strategy engine. Bull Call Spread, Bear Put Spread,
-//         Long Straddle, Long Strangle added alongside existing IC,
-//         Bull Put Spread, Bear Call Spread.
-//         Credit/debit auto-selector via VIX+PCR vote system.
-//         Event flag input for straddle/strangle trigger.
-//         Moneyness labels (ATM/OTM/Far OTM) on all strikes.
-//         NSE 2026 calendar fixed per circular CMTR71775 (15 holidays).
-//         Fixed: down5/up5 undefined bug in stress test.
+// MARKET RADAR v2.2.0
+// v2.1.0: 7-strategy engine, moneyness labels, NSE calendar fix.
+// v2.2.0: Panel 3 restructured — inputs on top, ANALYSE button,
+//         output below. VIX live override field (strat_vix) fixes
+//         silent Radar dependency bug. VIX comparison strip shows
+//         morning vs live VIX, warns on ≥1.5pt shift. BNF inputs
+//         collapsed by default. No auto-render on tab switch.
 // ═══════════════════════════════════════════════════════════════
 
 // ── State ─────────────────────────────────────────────────────
 let SCORE = null, DIRECTION = '', STRAT_AUTO = '';
 let RADAR_LOCKED = false, BREADTH_LOCKED = false, EVENING_LOCKED = false;
-
+let ANALYSIS_VIX = null;  // v2.2.0: VIX at time of last Analyse tap
 // ── Weights (sum = 1.0000) ─────────────────────────────────────
 // v1.5.0: PCR removed from score (38% directional accuracy — worse than random).
 // Its 4.76% weight redistributed: +2.38% to FII (most predictive), +2.38% to GIFT gap.
@@ -1035,7 +1032,9 @@ function buildCommand() {
 
   const price  = gv('nf_price');
   const atr    = gv('nf_atr');
-  const vix    = gv('india_vix') || 14;
+  // v2.2.0: strat_vix (Panel 3 live field) takes priority over Radar india_vix
+  // This fixes the bug where buildCommand() silently used stale locked Radar VIX
+  const vix    = gv('strat_vix') || gv('india_vix') || 14;
   const score  = SCORE || 0;
   const pcr    = gv('pcr_nf');
   const oiCall = gv('nf_oi_call');
@@ -1638,7 +1637,41 @@ function buildCommand() {
     return names[altStrat] || altStrat;
   };
 
-  out.innerHTML = `
+  // ── VIX comparison strip (v2.2.0) ─────────────────────────
+  const radarVix  = gv('india_vix') || null;
+  const stratVix  = gv('strat_vix') || null;
+  const usingOverride = !!(stratVix && radarVix && stratVix !== radarVix);
+  const vixGap    = (radarVix && stratVix) ? parseFloat((stratVix - radarVix).toFixed(2)) : null;
+  const vixGapAbs = vixGap !== null ? Math.abs(vixGap) : 0;
+  const vixShifted = vixGapAbs >= 1.5;
+  const vixCompHtml = usingOverride ? `
+  <div style="margin:8px 14px 0;background:${vixShifted?'rgba(200,33,62,0.06)':'rgba(0,110,150,0.06)'};border:1px solid ${vixShifted?'rgba(200,33,62,0.3)':'rgba(0,110,150,0.2)'};border-radius:var(--r);padding:10px 14px;">
+    <div style="font-size:7px;font-weight:700;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">VIX — MORNING VS NOW</div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div style="text-align:center;flex:1;background:var(--bg3);border-radius:6px;padding:7px 0;">
+        <div style="font-size:7px;color:var(--muted);margin-bottom:2px;">RADAR</div>
+        <div style="font-family:var(--font-mono);font-size:17px;font-weight:700;color:var(--muted);">${radarVix}</div>
+      </div>
+      <div style="font-size:14px;color:var(--muted);">→</div>
+      <div style="text-align:center;flex:1;background:var(--bg3);border-radius:6px;padding:7px 0;">
+        <div style="font-size:7px;color:var(--tl);margin-bottom:2px;">LIVE</div>
+        <div style="font-family:var(--font-mono);font-size:17px;font-weight:700;color:${vixShifted?'var(--rd)':'var(--tl)'};">${stratVix}</div>
+      </div>
+      <div style="text-align:center;flex:1;background:var(--bg3);border-radius:6px;padding:7px 0;">
+        <div style="font-size:7px;color:var(--muted);margin-bottom:2px;">CHANGE</div>
+        <div style="font-family:var(--font-mono);font-size:17px;font-weight:700;color:${vixShifted?(vixGap>0?'var(--rd)':'var(--gn)'):'var(--muted)'};">${vixGap>0?'+':''}${vixGap}</div>
+      </div>
+    </div>
+    <div style="margin-top:7px;font-size:8.5px;color:${vixShifted?(vixGap>0?'var(--rd)':'var(--gn)'):'var(--muted)'};">
+      ${vixShifted
+        ? (vixGap>0
+            ? '⚠️ VIX expanded +'+vixGapAbs.toFixed(1)+' pts — strike buffer widened. Credit may be lower than morning estimate.'
+            : '✅ VIX compressed '+vixGapAbs.toFixed(1)+' pts — premiums cheaper. Debit spreads now better value.')
+        : 'Change < 1.5 pts — conditions stable since morning.'}
+    </div>
+  </div>` : '';
+
+  out.innerHTML = vixCompHtml + `
 
   <!-- GO/NO-GO Banner -->
   <div class="go-banner ${goState}">
@@ -1757,6 +1790,23 @@ function buildCommand() {
   const oldNF = document.getElementById('nf-multi-output');
   if (oldNF) oldNF.innerHTML = '';
 }
+
+// v2.2.0: runAnalysis — called by ANALYSE button in Panel 3
+// Stamps the analysis time, updates saveState, then renders
+function runAnalysis() {
+  ANALYSIS_VIX = gv('strat_vix') || gv('india_vix') || 14;
+  // Timestamp the analysis
+  const now = new Date();
+  const ts  = now.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:true, timeZone:'Asia/Kolkata'});
+  const el  = document.getElementById('strat-analysed-ts');
+  if (el) el.textContent = 'Last analysed: ' + ts + ' IST';
+  saveState();
+  buildCommand();
+  // Scroll to output
+  const out = document.getElementById('cmd-output');
+  if (out) setTimeout(() => out.scrollIntoView({behavior:'smooth', block:'start'}), 100);
+}
+
 
 function toggleAlt() {
   const sec = document.getElementById('alt-section');
@@ -2009,7 +2059,7 @@ function go(n){
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('on',i===n));
   document.querySelectorAll('.panel').forEach((p,i)=>p.classList.toggle('on',i===n));
   if(n===2) calcScore();
-  if(n===3){ buildCommand(); updateEntrySignal(); }
+  if(n===3) updateEntrySignal(); // v2.2.0: no auto buildCommand — user hits Analyse button
   if(n===4) checkLocks();
 }
 
@@ -2084,6 +2134,25 @@ function saveEvening(){
     document.getElementById('btn-save-evening').style.display='none';
     document.getElementById('btn-edit-evening').style.display='inline-flex';
     if(document.getElementById('btn-lock-bottom')) document.getElementById('btn-lock-bottom').style.display='none';
+
+    // ── v2.2.1: Auto-compute close character from evening data ──
+    // Uses advances (primary) + FII cash (adjustment) → stored for
+    // tomorrow's Radar tab pre-fill. Never overwrites if Radar already locked.
+    const adv = parseFloat(document.getElementById('ev_n50adv')?.value);
+    const fii = parseFloat(document.getElementById('ev_fii')?.value) || 0;
+    if (!isNaN(adv)) {
+      // Advances score: 50-stock index breadth
+      const advScore = adv >= 38 ? 2 : adv >= 28 ? 1 : adv >= 20 ? 0 : adv >= 12 ? -1 : -2;
+      // FII adjustment: large institutional flow shifts by 0.5
+      const fiiAdj   = fii >= 1000 ? 0.5 : fii >= 200 ? 0.25 : fii <= -1000 ? -0.5 : fii <= -200 ? -0.25 : 0;
+      const autoCC   = Math.round(Math.max(-2, Math.min(2, advScore + fiiAdj)));
+      localStorage.setItem('mr140-autoclosechar', JSON.stringify({
+        val: autoCC,
+        adv, fii,
+        lockedAt: Date.now()
+      }));
+    }
+
     toast('🔒 Evening data locked — delta ready for tomorrow');
   }catch{ toast('❌ Save failed'); }
 }
@@ -2126,7 +2195,7 @@ function saveState(){
   const allFlds=['sp500','dow','usvix','nk','hsi','crude','gold','inr','yld',
     'gift_now','nifty_prev','gift_6am','india_vix','fii','fii_fut','fii_opt','dii',
     'max_pain_nf','max_pain_bn','close_char','n50adv','n50dma','bnfadv',
-    'nf_price','nf_atr','pcr_nf','nf_lot','nf_lots','nf_oi_call','nf_oi_put','nf_maxpain','event_flag',
+    'nf_price','nf_atr','pcr_nf','nf_lot','nf_lots','nf_oi_call','nf_oi_put','nf_maxpain','event_flag','strat_vix',
     'bn_price','bn_atr','pcr_bn','bn_lot','bn_lots','bn_oi_call','bn_oi_put','bn_maxpain'];
   const s={};
   allFlds.forEach(f=>{ const e=document.getElementById(f); if(e) s[f]=e.value; });
@@ -2147,6 +2216,26 @@ function loadState(){
     document.getElementById('btn-save-radar').style.display='none';
     document.getElementById('btn-edit-radar').style.display='inline-flex';
     document.getElementById('radar-status').textContent='Saved ✅ (from last session)';
+  } else {
+    // ── v2.2.1: Pre-fill close_char from last evening lock ─────
+    // Only when Radar is NOT yet locked (fresh morning session).
+    // Evening lock computed this from advances + FII — saves manual lookup.
+    try{
+      const acc = JSON.parse(localStorage.getItem('mr140-autoclosechar')||'null');
+      if(acc && typeof acc.val === 'number'){
+        const el = document.getElementById('close_char');
+        if(el){
+          el.value = String(acc.val);
+          // Show auto-fill note under the field
+          const labels = {2:'Strong ↑↑', 1:'Mild ↑', 0:'Neutral', '-1':'Mild ↓', '-2':'Weak ↓↓'};
+          const note = document.getElementById('ts-close_char');
+          if(note){
+            note.textContent = `Auto: ${labels[acc.val]||acc.val} (${acc.adv} adv, FII ${acc.fii>=0?'+':''}${acc.fii}Cr)`;
+            note.className = 'ts fresh';
+          }
+        }
+      }
+    }catch{}
   }
   const breadth=localStorage.getItem('mr140-breadth');
   if(breadth){
@@ -2178,7 +2267,6 @@ setInterval(checkLocks, 60000);
 setInterval(updateEntrySignal, 60000);
 calcScore();
 renderBreadth();
-buildCommand();
 updateEntrySignal();
 updateBhavStatus();
 loadFBConfig();
