@@ -353,7 +353,8 @@ async function syncFromCloud() {
   localStorage.setItem(BHAV_IDX, JSON.stringify(ghDates));
   setGHStatus('✅ Synced — ' + ghDates.length + ' days from GitHub', 'var(--gn)');
   if (log) log.textContent = '✅ ' + ghDates.length + ' days synced';
-  updateBhavStatus(); renderBhavCalendar(); checkBhavGaps(); buildCommand();
+  updateBhavStatus(); renderBhavCalendar(); checkBhavGaps();
+  bhavGapBanner(); bhavAutoFill(); buildCommand();
 }
 
 // ── NSE trading days helper (uses isTradingDay from app.js) ────
@@ -596,28 +597,49 @@ async function parseBhavCSV(text, fname) {
     const oi = iOI >= 0 ? parseFloat(c[iOI]) : NaN;
     const dk = _dk(dateObj), ek = _dk(expiryObj);
 
-    if (!byDate[dk]) byDate[dk] = { spot, opts: {}, pe_oi: {}, ce_oi: {}, uploaded_at: Date.now() };
+    if (!byDate[dk]) byDate[dk] = { spot, opts: {}, pe_oi: {}, ce_oi: {}, oi_max_pe: {}, oi_max_ce: {}, uploaded_at: Date.now() };
     byDate[dk].spot = spot;
     byDate[dk].opts[optType + '_' + Math.round(strike) + '_' + ek] = price;
-    if (!isNaN(oi)) {
-      if (optType === 'PE') byDate[dk].pe_oi[ek] = (byDate[dk].pe_oi[ek] || 0) + oi;
-      if (optType === 'CE') byDate[dk].ce_oi[ek] = (byDate[dk].ce_oi[ek] || 0) + oi;
+    if (!isNaN(oi) && oi > 0) {
+      if (optType === 'PE') {
+        byDate[dk].pe_oi[ek] = (byDate[dk].pe_oi[ek] || 0) + oi;
+        if (oi > (byDate[dk].oi_max_pe[ek]?.oi || 0))
+          byDate[dk].oi_max_pe[ek] = { strike: Math.round(strike), oi };
+      }
+      if (optType === 'CE') {
+        byDate[dk].ce_oi[ek] = (byDate[dk].ce_oi[ek] || 0) + oi;
+        if (oi > (byDate[dk].oi_max_ce[ek]?.oi || 0))
+          byDate[dk].oi_max_ce[ek] = { strike: Math.round(strike), oi };
+      }
     }
     count++;
   }
 
   const log = document.getElementById('bhav-log');
   for (const [dk, data] of Object.entries(byDate)) {
+    // Compute PCR per expiry
     data.pcr = {};
     const eks = new Set([...Object.keys(data.pe_oi), ...Object.keys(data.ce_oi)]);
     eks.forEach(ek => {
       const pe = data.pe_oi[ek] || 0, ce = data.ce_oi[ek] || 0;
       if (ce > 0) data.pcr[ek] = +(pe / ce).toFixed(3);
     });
+    // Compute OI walls per expiry: { [ek]: { ce: strike, pe: strike } }
+    data.oi_walls = {};
+    eks.forEach(ek => {
+      data.oi_walls[ek] = {
+        ce: data.oi_max_ce[ek]?.strike || null,
+        pe: data.oi_max_pe[ek]?.strike || null
+      };
+    });
     delete data.pe_oi; delete data.ce_oi;
+    delete data.oi_max_pe; delete data.oi_max_ce;
     if (log) log.textContent = 'Saving ' + dk + ' → data/' + dk + '.json...';
     await bhavSave(dk, data);
   }
+  // After upload: refresh UI, auto-fill Strategy tab, update gap banner
+  updateBhavStatus(); renderBhavCalendar(); checkBhavGaps();
+  bhavGapBanner(); bhavAutoFill();
   return count;
 }
 
@@ -652,6 +674,116 @@ function bhavATR() {
 function bhavPCR(expiryDate) {
   const d = _bhavLatestData();
   return (d && d.pcr) ? (d.pcr[_dk(expiryDate)] ?? null) : null;
+}
+
+// ── OI wall lookup — nearest expiry matching the trade window ─────
+function bhavOIWalls(expiryDate) {
+  const d = _bhavLatestData(); if (!d || !d.oi_walls) return null;
+  const ek = _dk(expiryDate);
+  return d.oi_walls[ek] || null;
+}
+
+// ── Auto-fill Strategy tab inputs from latest bhav data ───────────
+// Called after every upload and after sync.
+// Only fills EMPTY fields — never overwrites user-typed values.
+function bhavAutoFill() {
+  const dates = JSON.parse(localStorage.getItem(BHAV_IDX) || '[]');
+  if (!dates.length) return;
+
+  const d = _bhavLatestData();
+  if (!d) return;
+
+  const latestDK = dates[dates.length - 1];
+  const latestDate = _dkToDate(latestDK);
+
+  // Spot
+  _bhavFillIfEmpty('nf_price', Math.round(d.spot));
+
+  // ATR (vol proxy from rolling 5-day spots)
+  const atr = bhavATR();
+  if (atr) _bhavFillIfEmpty('nf_atr', atr);
+
+  // Find nearest expiry from getExpiries (app.js) — use first result
+  let nearestExpiry = null;
+  try { nearestExpiry = getExpiries('NF')[0]?.date; } catch(e) {}
+  if (!nearestExpiry) return;
+
+  // PCR for nearest expiry
+  const ek = _dk(nearestExpiry);
+  if (d.pcr && d.pcr[ek] != null)
+    _bhavFillIfEmpty('pcr_nf', d.pcr[ek].toFixed(2));
+
+  // OI walls for nearest expiry
+  if (d.oi_walls && d.oi_walls[ek]) {
+    const walls = d.oi_walls[ek];
+    if (walls.ce) _bhavFillIfEmpty('nf_oi_call', walls.ce);
+    if (walls.pe) _bhavFillIfEmpty('nf_oi_put',  walls.pe);
+  }
+
+  // Stamp timestamps on auto-filled fields
+  ['nf_price','nf_atr','pcr_nf','nf_oi_call','nf_oi_put'].forEach(id => {
+    const ts = document.getElementById('ts-' + id);
+    if (ts) { ts.textContent = 'AUTO · bhav ' + bhavLatestLabel(); ts.className = 'igrid-ts'; }
+  });
+
+  // Show a toast only once per day
+  const toastKey = 'mr_autofill_' + latestDK;
+  if (!sessionStorage.getItem(toastKey)) {
+    showToast('📊 Auto-filled from bhav · ' + bhavLatestLabel());
+    sessionStorage.setItem(toastKey, '1');
+  }
+
+  // Trigger strategy recalculation
+  if (typeof buildCommand === 'function') buildCommand();
+}
+
+function _bhavFillIfEmpty(id, val) {
+  const el = document.getElementById(id);
+  if (el && (el.value === '' || el.value === null)) el.value = val;
+}
+
+// ── Gap banner — shown in Strategy tab (Panel 3) ──────────────────
+// 0 days missing  → hidden
+// 1 day missing   → amber soft warning
+// 2+ days missing → red warning (ATR accuracy affected)
+async function bhavGapBanner() {
+  const el = document.getElementById('bhav-gap-strategy'); if (!el) return;
+  const uploaded = new Set(await bhavAllDates());
+  if (!uploaded.size) { el.style.display = 'none'; return; }
+
+  const today    = new Date(); today.setHours(0,0,0,0);
+  const yest     = new Date(today); yest.setDate(yest.getDate() - 1);
+  // Only look at last 14 trading days — older gaps don't affect ATR
+  const from14   = new Date(today); from14.setDate(from14.getDate() - 20);
+  const expected = nseTradingDays(from14, yest);
+  const missing  = expected.filter(dk => !uploaded.has(dk));
+
+  if (!missing.length) { el.style.display = 'none'; return; }
+
+  const MONTH = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmt   = dk => { const d = _dkToDate(dk); return d.getDate() + '-' + MONTH[d.getMonth()]; };
+  const gap   = missing.length;
+  const isRed = gap >= 2;
+  const bc    = isRed ? 'rgba(200,33,62,0.25)' : 'rgba(176,110,0,0.25)';
+  const bg    = isRed ? 'rgba(200,33,62,0.07)' : 'rgba(176,110,0,0.07)';
+  const col   = isRed ? 'var(--rd)' : 'var(--am)';
+  const icon  = isRed ? '⚠️' : '📅';
+  const msg   = isRed
+    ? `${gap} bhav days missing — ATR may be inaccurate. Upload in Smarts tab before trading.`
+    : `Yesterday's bhav not uploaded yet. Auto-fill will update once you upload.`;
+  const dates = missing.slice(-3).map(fmt).join(', ');
+
+  el.style.display = 'block';
+  el.innerHTML =
+    `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;` +
+    `background:${bg};border-bottom:1px solid ${bc}">` +
+    `<div style="font-size:18px;flex-shrink:0">${icon}</div>` +
+    `<div>` +
+    `<div style="font-size:10px;font-weight:700;color:${col};margin-bottom:2px">` +
+    `BHAV GAP · ${gap} DAY${gap>1?'S':''} MISSING</div>` +
+    `<div style="font-size:8.5px;color:var(--muted);line-height:1.5">${msg}</div>` +
+    `<div style="font-size:8px;color:${col};margin-top:3px;font-family:var(--font-mono)">${dates}${gap>3?' + '+(gap-3)+' more':''}</div>` +
+    `</div></div>`;
 }
 
 function bhavLatestLabel() {
@@ -711,6 +843,8 @@ async function loadFBConfig() {
     updateBhavStatus();
     renderBhavCalendar();
     checkBhavGaps();
+    bhavGapBanner();   // populate Strategy tab gap banner on load
+    bhavAutoFill();    // pre-fill Strategy tab if data exists
   } else {
     // No credentials anywhere — show setup panel
     const el = document.getElementById('fb-config-notice');

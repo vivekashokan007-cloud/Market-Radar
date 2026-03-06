@@ -733,11 +733,15 @@ function getVixMult(vix) {
 // v1.6.0: separate put/call base credits using their respective DTE multipliers
 // v1.7.0: BNF uses its own multiplier set (getDteMultBNF/getDteMultBNFCall)
 //         calibrated from 3-month NSE bhavcopy (134 BNF records)
+// v2.2.4: NF_PUT_SKEW — puts trade richer than calls in bear/uncertain markets
+//         Calibrated from 65 days Dec 2025–Mar 2026 (actual PE/CE ratio 1.61×)
+//         Conservative 1.35× — revisit after 3 months bull-market data
+const NF_PUT_SKEW = 1.35;
 function estimateCredit(width, dte, vix, isNF) {
   const vm   = getVixMult(vix);
   const putM = isNF ? getDteMult(dte)     : getDteMultBNF(dte);
   const calM = isNF ? getDteMultCall(dte) : getDteMultBNFCall(dte);
-  const rawP = r5(width * 0.38 * putM * vm);
+  const rawP = r5(width * 0.38 * putM * vm * (isNF ? NF_PUT_SKEW : 1.0));
   const rawC = r5(width * 0.38 * calM * vm);
   const maxAllowed = r5(width * 0.68);
   const midP = Math.min(rawP, maxAllowed);
@@ -1122,7 +1126,7 @@ function buildCommand() {
         goState='go'; goIcon='⚡'; goLabel='EVENT PLAY — LONG STRADDLE + STRANGLE';
         goReason=`Neutral score + ${eventFlag.toUpperCase()} event + VIX ${vix} (very low IV). Buying volatility before event is optimal.`;
         primaryStrat='STRADDLE'; altStrat='IC';
-      } else if (vix < 11 && Math.abs(score) <= 0.10) {
+      } else if (vix < 11 && Math.abs(score) <= 0.20) {
         // Iron Butterfly: VIX < 11 + dead neutral — max premium from ATM body
         goState='go'; goIcon='🦋'; goLabel='TRADE TODAY — IRON BUTTERFLY';
         goReason=`Score ${score>=0?'+':''}${score.toFixed(2)} (dead neutral), VIX ${vix} (very low) — ATM body gives 2–3× IC credit. Nifty must pin near ${Math.round(price/50)*50}.`;
