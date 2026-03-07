@@ -16,6 +16,7 @@
 
 // ── State ─────────────────────────────────────────────────────
 let SCORE = null, DIRECTION = '', STRAT_AUTO = '';
+let DRIFT = null; // bhav overnight shift signal — set in buildCommand()
 let RADAR_LOCKED = false, BREADTH_LOCKED = false, EVENING_LOCKED = false;
 let ANALYSIS_VIX = null;  // v2.2.0: VIX at time of last Analyse tap
 // ── Weights (sum = 1.0000) ─────────────────────────────────────
@@ -186,33 +187,48 @@ function checkLocks(){
 
   // Radar (morning lock): only open on trading days after 8:30am
   const mornOk = !isWeekend && t>=MORNING;
-  // Breadth: optimal entry 9:45–10:15 AM after opening volatility settles
-  const BREADTH_OPEN = 9*60+45;
+  // Breadth: hard unlock at 9:30, soft advisory shown until 10:15 (data still settling)
+  const BREADTH_OPEN = 9*60+30;
   // Smarts (evening lock): open on trading days after 3:45pm
   //   AND stays open all weekend (Sat + Sun) so Friday data can be entered anytime
   const eveOk  = isWeekend || t>=EVENING;
 
   const mBanner=document.getElementById('morning-lock');
   if(!mornOk && !RADAR_LOCKED){
-    const ml=MORNING-t;
-    document.getElementById('morning-msg').textContent=`Opens in ${Math.floor(ml/60)}h ${ml%60}m (8:30 AM IST)`;
+    // Weekend: show "Monday 8:30 AM" instead of countdown
+    if(isWeekend){
+      const ist = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Kolkata'}));
+      const next = new Date(ist);
+      // Find next Monday
+      const daysUntilMon = (1 - ist.getDay() + 7) % 7 || 7;
+      next.setDate(ist.getDate() + daysUntilMon);
+      const mon = next.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'});
+      document.getElementById('morning-msg').textContent=`Weekend — opens ${mon} at 8:30 AM IST`;
+      document.getElementById('morning-lock').querySelector('.lock-sub').textContent='Market data entry unlocks Monday morning';
+      document.getElementById('breadth-msg').textContent=`Weekend — enter breadth data on ${mon}`;
+    } else {
+      const ml=MORNING-t;
+      document.getElementById('morning-msg').textContent=`Opens in ${Math.floor(ml/60)}h ${ml%60}m (8:30 AM IST)`;
+      document.getElementById('breadth-msg').textContent=`Opens in ${Math.floor(ml/60)}h ${ml%60}m (8:30 AM IST)`;
+    }
     mBanner.classList.add('show');
     setDisabled(['sp500','dow','usvix','nk','hsi','crude','gold','inr','yld',
       'gift_now','nifty_prev','gift_6am','india_vix','fii','fii_fut','fii_opt','dii',
       'max_pain_nf','max_pain_bn','close_char'], true);
     setDisabled(['n50adv','n50dma','bnfadv'],true);
     document.getElementById('breadth-lock').classList.add('show');
-    document.getElementById('breadth-msg').textContent=`Opens in ${Math.floor(ml/60)}h ${ml%60}m (8:30 AM IST)`;
   } else if(!isWeekend && t < BREADTH_OPEN && !BREADTH_LOCKED){
-    // Market open but breadth data not yet reliable — show breadth lock only
+    // Before 9:30 — hard lock
     mBanner.classList.remove('show');
     document.getElementById('breadth-lock').classList.add('show');
     const bl = BREADTH_OPEN - t;
-    document.getElementById('breadth-msg').textContent=`Enter after 9:45 AM (${Math.floor(bl/60)}h ${bl%60}m)`;
+    document.getElementById('breadth-msg').textContent=`Opens at 9:30 AM (${Math.floor(bl/60)}h ${bl%60}m)`;
     setDisabled(['n50adv','n50dma','bnfadv'],true);
   } else {
     mBanner.classList.remove('show');
     if(!BREADTH_LOCKED) document.getElementById('breadth-lock').classList.remove('show');
+    // Soft timing advisory after 9:30 (replaces hard lock)
+    updateBreadthTimingTip(t);
   }
 
   const eBanner=document.getElementById('evening-lock');
@@ -233,6 +249,27 @@ function checkLocks(){
 
   // Update entry time signal
   updateEntrySignal();
+}
+
+function updateBreadthTimingTip(t) {
+  const el = document.getElementById('breadth-timing-tip');
+  if (!el) return;
+  const OPTIMAL_START = 9*60+30;
+  const OPTIMAL_PEAK  = 9*60+45;
+  const OPTIMAL_END   = 10*60+15;
+  if (t < OPTIMAL_START) { el.style.display='none'; return; }
+  if (t < OPTIMAL_PEAK) {
+    el.style.display='block';
+    el.innerHTML = `<div style="font-size:8.5px;color:var(--am);padding:6px 14px;border-bottom:1px solid var(--border)">` +
+      `⏳ <strong>Market just opened</strong> — you can enter now but values may still be settling. ` +
+      `Optimal window is <strong>9:45–10:15 AM</strong> for stable OI and breadth data.</div>`;
+  } else if (t <= OPTIMAL_END) {
+    el.style.display='block';
+    el.innerHTML = `<div style="font-size:8.5px;color:var(--gn);padding:6px 14px;border-bottom:1px solid var(--border)">` +
+      `✅ <strong>Optimal entry window</strong> — 9:45–10:15 AM. OI settled, breadth reliable. Good time to enter.</div>`;
+  } else {
+    el.style.display='none';
+  }
 }
 
 function setDisabled(ids, val){
@@ -495,6 +532,35 @@ function calcScore(){
   buildCommand();
 }
 
+// ── Drift row in Verdict tab — shows overnight shift from bhav ────────────────
+function renderDriftRow() {
+  const el = document.getElementById('drift-row');
+  if (!el) return;
+  if (!DRIFT) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'block';
+  const d = DRIFT;
+  const col = d.score > 0.05 ? 'var(--gn)' : d.score < -0.05 ? 'var(--rd)' : 'var(--muted)';
+  const tag = d.score > 0.05
+    ? '<span class="tag up">↑</span>'
+    : d.score < -0.05
+    ? '<span class="tag dn">↓</span>'
+    : '<span class="tag fl">→</span>';
+  const spotTxt = `${d.spotPts >= 0 ? '+' : ''}${d.spotPts}pts vs ${d.label}`;
+  const driftTxt = `${d.score >= 0 ? '+' : ''}${d.score.toFixed(2)} drift adj`;
+  el.innerHTML =
+    `<div style="padding:7px 14px;border-bottom:1px solid var(--border);border-top:2px solid var(--border);background:var(--bg3)">` +
+    `<div style="font-size:8px;font-weight:700;letter-spacing:1px;color:var(--muted);margin-bottom:4px">OVERNIGHT SHIFT (bhav → live)</div>` +
+    `<div style="display:flex;align-items:center;gap:8px">` +
+    `<div style="flex:1;font-size:9px;color:var(--muted)">${spotTxt}</div>` +
+    `<div style="font-size:10px;font-family:var(--font-mono);font-weight:700;color:${col}">${driftTxt}</div>` +
+    `<div style="width:8px">${tag}</div>` +
+    `</div>` +
+    `</div>`;
+}
+
 // ── Verdict renderer ───────────────────────────────────────────
 function renderVerdict(score, dir, bull, bear, neut, contribs, usedW, bnfAdj, ev, vix){
   const col=score>=0.4?'var(--gn)':score<=-0.4?'var(--rd)':'var(--am)';
@@ -733,7 +799,7 @@ function getVixMult(vix) {
 // v1.6.0: separate put/call base credits using their respective DTE multipliers
 // v1.7.0: BNF uses its own multiplier set (getDteMultBNF/getDteMultBNFCall)
 //         calibrated from 3-month NSE bhavcopy (134 BNF records)
-// v2.2.4: NF_PUT_SKEW — puts trade richer than calls in bear/uncertain markets
+// v2.3.0: NF_PUT_SKEW — puts trade richer than calls in bear/uncertain markets
 //         Calibrated from 65 days Dec 2025–Mar 2026 (actual PE/CE ratio 1.61×)
 //         Conservative 1.35× — revisit after 3 months bull-market data
 const NF_PUT_SKEW = 1.35;
@@ -1075,18 +1141,29 @@ function buildCommand() {
     return;
   }
 
+  // ── Overnight drift from bhav vs live values ──────────────
+  DRIFT = (typeof bhavDriftScore === 'function')
+    ? bhavDriftScore(price, oiCall, oiPut)
+    : null;
+  const effectiveScore = DRIFT
+    ? Math.max(-2, Math.min(2, score + DRIFT.score))
+    : score;
+
+  // Refresh drift row in Verdict tab if visible
+  renderDriftRow();
+
   // ── Expiry ─────────────────────────────────────────────────
   const expiries = getExpiries('NF');
   const bestExp  = pickBestExpiry(expiries);
 
   // ── Direction & strategy selection ─────────────────────────
-  const dirCat  = directionCategory(score);
+  const dirCat  = directionCategory(effectiveScore);
   const isBull  = dirCat === 'STRONG_BULL' || dirCat === 'MILD_BULL';
   const isBear  = dirCat === 'STRONG_BEAR' || dirCat === 'MILD_BEAR';
   const isNeut  = dirCat === 'NEUTRAL';
   const useCredit = (dirCat === 'MILD_BULL' || dirCat === 'MILD_BEAR')
                   ? preferCreditStrategy(vix, pcr, isBull)
-                  : true; // IC and strong directional don't use this flag
+                  : true;
 
   // ── GO/NO-GO & primary strategy selection ──────────────────
   let goState, goIcon, goLabel, goReason, primaryStrat, altStrat;

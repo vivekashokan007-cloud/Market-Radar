@@ -72,24 +72,22 @@ function getGHConfig() {
   return null;  // not cached yet — use fetchLoginJson() for async load
 }
 
-// Fetch login.json from the repo using raw.githubusercontent.com
-// Works without auth because the repo is public (GitHub Pages requirement)
+// Fetch credentials from /api/config (Vercel serverless function)
+// Token lives in Vercel environment variables — never exposed in any file
 async function fetchLoginJson(owner, repo, branch) {
-  branch = branch || 'main';
-  const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${LOGIN_JSON_PATH}`;
   try {
-    const res = await fetch(url + '?_=' + Date.now());  // bust cache
+    const res = await fetch('/api/config?_=' + Date.now());  // bust cache
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    if (!data.owner || !data.repo || !data.token) throw new Error('login.json missing fields');
+    if (!data.owner || !data.repo || !data.token) throw new Error('api/config missing fields');
     return data;
   } catch(e) {
-    console.warn('fetchLoginJson failed:', e.message);
+    console.warn('fetchConfig failed:', e.message);
     return null;
   }
 }
 
-// Bootstrap: fetch login.json from known repo on every cold start
+// Bootstrap: fetch credentials from Vercel /api/config on every cold start
 async function bootstrapConfig() {
   if (_ghCfg) return _ghCfg;
 
@@ -99,13 +97,13 @@ async function bootstrapConfig() {
     try {
       _ghCfg = JSON.parse(saved);
       // Silently re-fetch in background to pick up token rotations
-      _refreshLoginJson(REPO_OWNER, REPO_NAME);
+      _refreshLoginJson();
       return _ghCfg;
     } catch(e) {}
   }
 
-  // Cold start — fetch login.json directly (repo location is hardcoded)
-  const data = await fetchLoginJson(REPO_OWNER, REPO_NAME);
+  // Cold start — fetch from /api/config
+  const data = await fetchLoginJson();
   if (data) {
     _ghCfg = { owner: data.owner, repo: data.repo, token: data.token };
     localStorage.setItem(GH_KEY, JSON.stringify(_ghCfg));
@@ -116,28 +114,24 @@ async function bootstrapConfig() {
 }
 
 // Background refresh — pick up token changes without user doing anything
-async function _refreshLoginJson(owner, repo) {
-  const data = await fetchLoginJson(owner, repo);
+async function _refreshLoginJson() {
+  const data = await fetchLoginJson();
   if (data && data.token) {
     _ghCfg = { owner: data.owner, repo: data.repo, token: data.token };
     localStorage.setItem(GH_KEY, JSON.stringify(_ghCfg));
   }
 }
 
-// ── Smarts tab UI: only ask for owner + repo (not token) ───────
-// Token is always fetched from login.json — user never types it
+// ── Smarts tab UI: connect button calls /api/config ───────────
+// No manual entry needed — all credentials come from Vercel env vars
 function saveGHConfig() {
-  const owner = (document.getElementById('gh-owner') || {}).value.trim();
-  const repo  = (document.getElementById('gh-repo')  || {}).value.trim();
-  if (!owner || !repo) { showToast('Enter username and repo name'); return; }
-  // Store location so we know where to fetch login.json from
-  localStorage.setItem('mr_gh_location', JSON.stringify({ owner, repo }));
   _ghCfg = null;  // clear cache so bootstrapConfig re-fetches
-  document.getElementById('fb-config-notice').style.display = 'none';
-  setGHStatus('⏳ Fetching login.json from ' + owner + '/' + repo + '...', 'var(--am)');
-  fetchLoginJson(owner, repo).then(data => {
+  const notice = document.getElementById('fb-config-notice');
+  if (notice) notice.style.display = 'none';
+  setGHStatus('⏳ Loading credentials from /api/config...', 'var(--am)');
+  fetchLoginJson().then(data => {
     if (!data) {
-      setGHStatus('❌ Could not fetch login.json — check repo is public and file exists', 'var(--rd)');
+      setGHStatus('❌ Could not load credentials — check Vercel env vars GH_OWNER / GH_REPO / GH_TOKEN', 'var(--rd)');
       return;
     }
     _ghCfg = { owner: data.owner, repo: data.repo, token: data.token };
@@ -202,28 +196,24 @@ function _ghHeaders(cfg) {
 
 async function _ghGet(path) {
   const cfg = getGHConfig(); if (!cfg) return null;
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`;
-
-  // Try with token first (needed for writes/SHA); fall back to no-auth for public repo reads
-  const attempts = [
-    { headers: _ghHeaders(cfg) },
-    { headers: { 'Accept': 'application/vnd.github.v3+json' } }  // no-auth fallback
-  ];
-
-  for (const opts of attempts) {
-    try {
-      const res = await fetch(url, opts);
-      if (res.status === 404) return null;
-      if (!res.ok) continue;  // try next attempt
-      const d = await res.json();
-      if (!d.content) continue;
-      return {
-        data: JSON.parse(atob(d.content.replace(/\n/g, ''))),
-        sha:  d.sha,
-      };
-    } catch(e) { console.warn('ghGet attempt:', path, e.message); }
-  }
-  return null;
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`,
+      { headers: _ghHeaders(cfg) }
+    );
+    if (res.status === 404) return null;
+    if (res.status === 401 || res.status === 403) {
+      setGHStatus('❌ Token error (' + res.status + ') — re-check PAT has Contents: Read & Write', 'var(--rd)');
+      return null;
+    }
+    if (!res.ok) { console.warn('ghGet HTTP ' + res.status + ':', path); return null; }
+    const d = await res.json();
+    if (!d.content) { console.warn('ghGet: no content field for', path); return null; }
+    return {
+      data: JSON.parse(atob(d.content.replace(/\n/g, ''))),
+      sha:  d.sha,
+    };
+  } catch(e) { console.warn('ghGet:', path, e.message); return null; }
 }
 
 async function _ghPut(path, content, sha) {
@@ -692,58 +682,146 @@ function bhavOIWalls(expiryDate) {
   return d.oi_walls[ek] || null;
 }
 
-// ── Auto-fill Strategy tab inputs from latest bhav data ───────────
-// Called after every upload and after sync.
-// Only fills EMPTY fields — never overwrites user-typed values.
+// ── bhavAutoFill v2.3.0: ATR-only fill + baseline card + hints ────────────────
+// Spot/PCR/OI walls = user enters LIVE values. ATR = computed from bhav only.
+// Bhav values shown as reference hints in Strategy tab for comparison.
 function bhavAutoFill() {
   const dates = JSON.parse(localStorage.getItem(BHAV_IDX) || '[]');
   if (!dates.length) return;
-
   const d = _bhavLatestData();
   if (!d) return;
 
-  const latestDK = dates[dates.length - 1];
-  const latestDate = _dkToDate(latestDK);
-
-  // Spot
-  _bhavFillIfEmpty('nf_price', Math.round(d.spot));
-
-  // ATR (vol proxy from rolling 5-day spots)
+  // Auto-fill ATR only (no live equivalent — derived from rolling bhav spots)
   const atr = bhavATR();
-  if (atr) _bhavFillIfEmpty('nf_atr', atr);
-
-  // Find nearest expiry from getExpiries (app.js) — use first result
-  let nearestExpiry = null;
-  try { nearestExpiry = getExpiries('NF')[0]?.date; } catch(e) {}
-  if (!nearestExpiry) return;
-
-  // PCR for nearest expiry
-  const ek = _dk(nearestExpiry);
-  if (d.pcr && d.pcr[ek] != null)
-    _bhavFillIfEmpty('pcr_nf', d.pcr[ek].toFixed(2));
-
-  // OI walls for nearest expiry
-  if (d.oi_walls && d.oi_walls[ek]) {
-    const walls = d.oi_walls[ek];
-    if (walls.ce) _bhavFillIfEmpty('nf_oi_call', walls.ce);
-    if (walls.pe) _bhavFillIfEmpty('nf_oi_put',  walls.pe);
+  if (atr) {
+    const el = document.getElementById('nf_atr');
+    if (el && !el.value) {
+      el.value = atr;
+      const ts = document.getElementById('ts-nf_atr');
+      if (ts) { ts.textContent = 'AUTO · bhav ' + bhavLatestLabel(); ts.className = 'igrid-ts'; }
+    }
   }
 
-  // Stamp timestamps on auto-filled fields
-  ['nf_price','nf_atr','pcr_nf','nf_oi_call','nf_oi_put'].forEach(id => {
-    const ts = document.getElementById('ts-' + id);
-    if (ts) { ts.textContent = 'AUTO · bhav ' + bhavLatestLabel(); ts.className = 'igrid-ts'; }
-  });
+  // Render baseline reference card in Breadth tab
+  renderBhavBaseline();
 
-  // Show a toast only once per day
-  const toastKey = 'mr_autofill_' + latestDK;
-  if (!sessionStorage.getItem(toastKey)) {
-    showToast('📊 Auto-filled from bhav · ' + bhavLatestLabel());
-    sessionStorage.setItem(toastKey, '1');
-  }
+  // Render hint values below Strategy tab inputs
+  renderBhavHints();
 
   // Trigger strategy recalculation
   if (typeof buildCommand === 'function') buildCommand();
+}
+
+// ── Baseline reference card — rendered in Breadth tab ─────────────────────────
+function renderBhavBaseline() {
+  const el = document.getElementById('bhav-baseline');
+  if (!el) return;
+
+  const d = _bhavLatestData();
+  if (!d) { el.style.display = 'none'; return; }
+
+  const label = bhavLatestLabel();
+  const spot  = Math.round(d.spot);
+  const atr   = bhavATR() || '—';
+
+  let nearestExpiry = null;
+  try { nearestExpiry = getExpiries('NF')[0]?.date; } catch(e) {}
+  const ek = nearestExpiry ? _dk(nearestExpiry) : null;
+
+  const pcr      = (ek && d.pcr && d.pcr[ek] != null) ? d.pcr[ek].toFixed(2) : '—';
+  const callWall = (ek && d.oi_walls && d.oi_walls[ek] && d.oi_walls[ek].ce) ? d.oi_walls[ek].ce.toLocaleString('en-IN') : '—';
+  const putWall  = (ek && d.oi_walls && d.oi_walls[ek] && d.oi_walls[ek].pe) ? d.oi_walls[ek].pe.toLocaleString('en-IN') : '—';
+
+  el.style.display = 'block';
+  el.innerHTML =
+    `<div style="margin:0 0 4px;font-size:9px;font-weight:700;color:var(--tl);letter-spacing:0.5px">` +
+    `📊 YESTERDAY'S CLOSE <span style="font-weight:400;color:var(--muted);font-size:8px">${label}</span></div>` +
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:9px;line-height:1.8">` +
+    `<div><span style="color:var(--muted)">Spot</span> <span style="font-family:var(--font-mono);font-weight:700">${spot.toLocaleString('en-IN')}</span></div>` +
+    `<div><span style="color:var(--muted)">Vol Proxy</span> <span style="font-family:var(--font-mono);font-weight:700">${atr}</span></div>` +
+    `<div><span style="color:var(--muted)">PCR</span> <span style="font-family:var(--font-mono);font-weight:700">${pcr}</span></div>` +
+    `<div><span style="color:var(--muted)">Call Wall</span> <span style="font-family:var(--font-mono);font-weight:700">${callWall}</span></div>` +
+    `<div style="grid-column:1/-1"><span style="color:var(--muted)">Put Wall</span> <span style="font-family:var(--font-mono);font-weight:700">${putWall}</span>` +
+    `</div></div>`;
+}
+
+// ── Hint values below Strategy tab inputs ─────────────────────────────────────
+function renderBhavHints() {
+  const d = _bhavLatestData();
+  if (!d) return;
+
+  const label = bhavLatestLabel();
+  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dk = _bhavLatestDK();
+  const dayName = dk ? (() => {
+    const dt = _dkToDate(dk);
+    return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
+  })() : '';
+
+  let nearestExpiry = null;
+  try { nearestExpiry = getExpiries('NF')[0]?.date; } catch(e) {}
+  const ek = nearestExpiry ? _dk(nearestExpiry) : null;
+
+  const hints = {
+    'nf_price':   Math.round(d.spot).toLocaleString('en-IN'),
+    'pcr_nf':     (ek && d.pcr && d.pcr[ek] != null) ? d.pcr[ek].toFixed(2) : null,
+    'nf_oi_call': (ek && d.oi_walls && d.oi_walls[ek] && d.oi_walls[ek].ce) ? d.oi_walls[ek].ce.toLocaleString('en-IN') : null,
+    'nf_oi_put':  (ek && d.oi_walls && d.oi_walls[ek] && d.oi_walls[ek].pe) ? d.oi_walls[ek].pe.toLocaleString('en-IN') : null,
+  };
+
+  Object.entries(hints).forEach(([id, val]) => {
+    const hint = document.getElementById('bhav-hint-' + id);
+    if (hint && val) {
+      hint.textContent = `ref: ${val} (${dayName} close)`;
+      hint.style.display = 'block';
+    }
+  });
+}
+
+// ── Drift score — spot + OI wall shift vs yesterday's bhav ────────────────────
+// Returns { score: ±0.25 max, spotDrift, wallDrift, refSpot, refCallWall, refPutWall }
+// Called from app.js buildCommand() with live Strategy tab values
+function bhavDriftScore(liveSpot, liveCallWall, livePutWall) {
+  const d   = _bhavLatestData();
+  const atr = bhavATR();
+  if (!d || !atr || !liveSpot) return null;
+
+  let nearestExpiry = null;
+  try { nearestExpiry = getExpiries('NF')[0]?.date; } catch(e) {}
+  const ek = nearestExpiry ? _dk(nearestExpiry) : null;
+
+  const refSpot     = d.spot;
+  const refCallWall = (ek && d.oi_walls && d.oi_walls[ek]) ? d.oi_walls[ek].ce : null;
+  const refPutWall  = (ek && d.oi_walls && d.oi_walls[ek]) ? d.oi_walls[ek].pe : null;
+
+  // Spot drift: how many ATRs has spot moved from yesterday's close
+  const spotDrift = Math.max(-1, Math.min(1, (liveSpot - refSpot) / atr));
+
+  // OI wall shift: average movement of both walls in ATR units
+  let wallDrift = 0;
+  let wallCount = 0;
+  if (refCallWall && liveCallWall) { wallDrift += (liveCallWall - refCallWall) / atr; wallCount++; }
+  if (refPutWall  && livePutWall)  { wallDrift += (livePutWall  - refPutWall)  / atr; wallCount++; }
+  if (wallCount > 0) wallDrift = Math.max(-1, Math.min(1, wallDrift / wallCount));
+
+  // Combined drift: spot (60%) + wall shift (40%), max ±0.25
+  const raw   = spotDrift * 0.60 + (wallCount > 0 ? wallDrift * 0.40 : 0);
+  const score = Math.max(-0.25, Math.min(0.25, raw));
+
+  const spotPts = Math.round(liveSpot - refSpot);
+  const dir     = score > 0.05 ? '↑' : score < -0.05 ? '↓' : '→';
+
+  return {
+    score,
+    spotDrift,
+    wallDrift: wallCount > 0 ? wallDrift : null,
+    refSpot,
+    refCallWall,
+    refPutWall,
+    spotPts,
+    dir,
+    label: bhavLatestLabel(),
+  };
 }
 
 function _bhavFillIfEmpty(id, val) {
@@ -808,6 +886,43 @@ function clearBhavData() {
   localStorage.removeItem(BHAV_IDX);
   updateBhavStatus(); renderBhavCalendar(); checkBhavGaps(); buildCommand();
   showToast('Local cache cleared — tap Sync Cloud to restore from GitHub');
+}
+
+// ── Debug sync — shows exact failure reason ──────────────────
+async function bhavDebugSync() {
+  const cfg = getGHConfig();
+  const log = document.getElementById('bhav-log');
+  const setLog = m => { if (log) log.textContent = m; };
+
+  if (!cfg) { setLog('❌ No config — login.json not loaded'); return; }
+  setLog('Config: ' + cfg.owner + '/' + cfg.repo + ' token=' + cfg.token.slice(0,8) + '...');
+
+  // Test 1: repo access
+  try {
+    const r1 = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}`,
+      { headers: _ghHeaders(cfg) });
+    setLog('Repo access: HTTP ' + r1.status + (r1.ok ? ' ✅' : ' ❌'));
+    if (!r1.ok) return;
+  } catch(e) { setLog('Repo access: network error — ' + e.message); return; }
+
+  // Test 2: read index.json
+  try {
+    const r2 = await fetch(
+      `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/data/index.json`,
+      { headers: _ghHeaders(cfg) });
+    setLog('data/index.json: HTTP ' + r2.status + (r2.ok ? ' ✅' : ' ❌'));
+    if (r2.ok) {
+      const d = await r2.json();
+      const parsed = JSON.parse(atob(d.content.replace(/\n/g,'')));
+      setLog('index.json: ' + parsed.dates.length + ' dates ✅ — tap Sync Cloud now');
+    } else if (r2.status === 404) {
+      setLog('data/index.json: 404 — data folder not found in repo');
+    } else if (r2.status === 401) {
+      setLog('Token expired or wrong permissions — regenerate PAT with Contents: Read & Write');
+    } else if (r2.status === 403) {
+      setLog('Token forbidden — check PAT scope includes this private repo');
+    }
+  } catch(e) { setLog('index.json read error: ' + e.message); }
 }
 
 // ── Status summary ─────────────────────────────────────────────

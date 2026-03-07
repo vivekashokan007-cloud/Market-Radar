@@ -22,7 +22,7 @@
 <header>
   <div>
     <div class="hlogo">MARKET RADAR
-      <span>OPTIONS INTELLIGENCE · NSE V2.2.5</span>
+      <span>OPTIONS INTELLIGENCE · NSE V2.3.0</span>
     </div>
   </div>
   <div class="hright">
@@ -261,10 +261,12 @@
   </div>
 
   <div class="btn-row">
-    <div style="flex:1;font-size:9px;color:var(--muted)">Enter between 9:45–10:15 AM · after opening volatility settles</div>
+    <div style="flex:1;font-size:9px;color:var(--muted)">Enter from 9:30 AM onwards · optimal 9:45–10:15 AM</div>
     <button class="btn btn-save btn-sm" id="btn-save-breadth" onclick="saveBreadth()">💾 SAVE</button>
     <button class="btn btn-edit btn-sm" id="btn-edit-breadth" style="display:none" onclick="editBreadth()">✏️ EDIT</button>
   </div>
+  <!-- Soft timing advisory — shown from 9:30, disappears after 10:15 -->
+  <div id="breadth-timing-tip" style="display:none"></div>
 
   <!-- NIFTY 50 Breadth -->
   <div class="sec gn">Nifty 50 Breadth</div>
@@ -301,6 +303,9 @@
       <div class="ts" id="ts-bnfadv"></div>
     </div>
   </div>
+
+  <!-- Bhav baseline reference card — yesterday's close values -->
+  <div id="bhav-baseline" style="display:none;margin:10px 14px 0;background:var(--bg2);border:1px solid var(--tl-br);border-radius:var(--r);padding:10px 12px;"></div>
 
   <!-- Live breadth display -->
   <div class="sec pu">Live Breadth Signals</div>
@@ -392,6 +397,8 @@
   <!-- Parameter breakdown -->
   <div class="sec gn">Parameter Breakdown</div>
   <div id="param-rows"></div>
+  <!-- Overnight shift row — populated by renderDriftRow() when live Strategy inputs present -->
+  <div id="drift-row" style="display:none"></div>
 
 </div><!-- /p2 -->
 
@@ -432,6 +439,7 @@
         <div class="igrid-item">
           <div class="igrid-label">Spot Price</div>
           <input class="igrid-input" id="nf_price" type="text" inputmode="decimal" placeholder="25471">
+          <div id="bhav-hint-nf_price" class="igrid-ts" style="display:none;color:var(--muted)"></div>
         </div>
         <div class="igrid-item">
           <div class="igrid-label">ATR (14-day)</div>
@@ -441,6 +449,7 @@
           <div class="igrid-label">NF PCR</div>
           <input class="igrid-input" id="pcr_nf" type="text" inputmode="decimal" placeholder="1.15" oninput="stampField('pcr_nf')">
           <div class="igrid-ts" id="ts-pcr_nf"></div>
+          <div id="bhav-hint-pcr_nf" class="igrid-ts" style="display:none;color:var(--muted)"></div>
         </div>
         <div class="igrid-item">
           <div class="igrid-label">Max Pain NF</div>
@@ -451,11 +460,13 @@
           <div class="igrid-label">Call OI Wall</div>
           <input class="igrid-input" id="nf_oi_call" type="text" inputmode="decimal" placeholder="25700" oninput="stampField('nf_oi_call')">
           <div class="igrid-ts" id="ts-nf_oi_call"></div>
+          <div id="bhav-hint-nf_oi_call" class="igrid-ts" style="display:none;color:var(--muted)"></div>
         </div>
         <div class="igrid-item">
           <div class="igrid-label">Put OI Wall</div>
           <input class="igrid-input" id="nf_oi_put" type="text" inputmode="decimal" placeholder="25200" oninput="stampField('nf_oi_put')">
           <div class="igrid-ts" id="ts-nf_oi_put"></div>
+          <div id="bhav-hint-nf_oi_put" class="igrid-ts" style="display:none;color:var(--muted)"></div>
         </div>
       </div>
     </div>
