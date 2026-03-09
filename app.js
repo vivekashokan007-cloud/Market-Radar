@@ -800,7 +800,9 @@ function getVixMult(vix) {
   if (vix < 14) return 0.78;
   if (vix < 16) return 1.00;
   if (vix < 18) return 1.22;
-  return 1.45;
+  if (vix < 22) return 1.55;  // high-VIX zone — premiums richly priced
+  if (vix < 26) return 1.85;  // panic zone
+  return 2.20;                 // extreme panic
 }
 
 // FIX 1: Cap credit at 68% of width — prevents negative R:R
@@ -1184,10 +1186,26 @@ function buildCommand() {
     goState='avoid'; goIcon='🚫'; goLabel='EXPIRY WEEK — DO NOT OPEN';
     goReason=`${bestExp.dte} DTE is too close. Real premiums ₹5–₹30 — not worth the risk. CLOSE existing positions only.`;
     primaryStrat='AVOID';
-  } else if (vix >= 18) {
-    goState='avoid'; goIcon='🔴'; goLabel='SKIP TODAY — VIX TOO HIGH';
-    goReason=`India VIX ${vix} ≥ 18 — panic territory. All strategy win rates collapse. Stay fully out.`;
+  } else if (vix >= 28) {
+    goState='avoid'; goIcon='🔴'; goLabel='AVOID — EXTREME VOLATILITY';
+    goReason=`India VIX ${vix} ≥ 28 — systemic panic. No strategy has edge. Stay fully out.`;
     primaryStrat='AVOID';
+  } else if (vix >= 20) {
+    // High-VIX directional credit zone — OI-wall anchored spreads only
+    const richness = Math.round((vix/14 - 1) * 100);
+    if (score > 0.05) {
+      goState='caution'; goIcon='🟠'; goLabel=`HIGH VIX BULL — BULL PUT SPREAD`;
+      goReason=`VIX ${vix} — puts ${richness}% above normal. Sell inflated put premium anchored at OI wall (${oiPut ? f(oiPut) : 'key support'}). 1 lot, defined risk.`;
+      primaryStrat='HVIX_BULL_PUT'; altStrat=null;
+    } else if (score < -0.05) {
+      goState='caution'; goIcon='🟠'; goLabel=`HIGH VIX BEAR — BEAR CALL SPREAD`;
+      goReason=`VIX ${vix} — calls ${richness}% above normal. Sell inflated call premium anchored at OI wall (${oiCall ? f(oiCall) : 'key resistance'}). 1 lot, defined risk.`;
+      primaryStrat='HVIX_BEAR_CALL'; altStrat=null;
+    } else {
+      goState='avoid'; goIcon='🚫'; goLabel='HIGH VIX + NEUTRAL — SIT OUT';
+      goReason=`VIX ${vix} with no directional edge (score ${score>=0?'+':''}${score.toFixed(2)}). IC win rate collapses above VIX 20. Wait for clearer direction or VIX < 20.`;
+      primaryStrat='AVOID';
+    }
   } else {
     // Route by direction
     if (dirCat === 'STRONG_BULL') {
@@ -1296,6 +1314,29 @@ function buildCommand() {
   const dsBEPbull = atmStrike + ds.netDebit;  // Bull Call BEP
   const dsBEPbear = atmStrike - ds.netDebit;  // Bear Put BEP
 
+  // ── High-VIX directional credit spread (VIX 20–28) ───────
+  // Strike anchored on OI wall — not ATR — to join smart money
+  const hvixCallSell = oiCall ? r50(oiCall)          : r50(price + 225);
+  const hvixCallBuy  = hvixCallSell + 200;
+  const hvixPutSell  = oiPut  ? r50(oiPut)           : r50(price - 225);
+  const hvixPutBuy   = hvixPutSell - 200;
+  const hvixCallDist = atr > 0 ? (hvixCallSell - price) / atr : 1.0;
+  const hvixPutDist  = atr > 0 ? (price - hvixPutSell)  / atr : 1.0;
+  const hvixCrBase   = estimateCredit(200, dte, vix, true);
+  const hvixCallMid  = Math.min(r5(hvixCrBase.midCall * distFactorCall(hvixCallDist, dte) / Math.max(pcrPremAdj(pcr,dte),1)), r5(200*0.68));
+  const hvixPutMid   = Math.min(r5(hvixCrBase.mid     * distFactor(hvixPutDist)            * pcrPremAdj(pcr,dte)),              r5(200*0.68));
+  const hvixLots     = 1;  // conservative — 1 lot only in high-VIX
+  const hvixCallNet  = hvixCallMid * NF_LOT_SIZE * hvixLots;
+  const hvixCallMaxL = (200 - hvixCallMid) * NF_LOT_SIZE * hvixLots;
+  const hvixCallBEP  = hvixCallSell + hvixCallMid;
+  const hvixPutNet   = hvixPutMid  * NF_LOT_SIZE * hvixLots;
+  const hvixPutMaxL  = (200 - hvixPutMid) * NF_LOT_SIZE * hvixLots;
+  const hvixPutBEP   = hvixPutSell - hvixPutMid;
+  const hvixCallMn   = moneyness(hvixCallSell, price, true);
+  const hvixCallBuyMn= moneyness(hvixCallBuy,  price, true);
+  const hvixPutMn    = moneyness(hvixPutSell,  price, false);
+  const hvixPutBuyMn = moneyness(hvixPutBuy,   price, false);
+
   // ── Straddle / Strangle ────────────────────────────────────
   const sd      = estimateStraddle(price, dte, vix);
   const sdTotal = sd.unit * NF_LOT_SIZE * cm.safeLots;
@@ -1327,8 +1368,8 @@ function buildCommand() {
   }
 
   // ── VIX context ────────────────────────────────────────────
-  const vixPct   = Math.min(100, (vix / 25) * 100);
-  const vixColor = vix < 14 ? 'var(--gn)' : vix < 16 ? 'var(--am)' : 'var(--rd)';
+  const vixPct   = Math.min(100, (vix / 30) * 100);
+  const vixColor = vix < 14 ? 'var(--gn)' : vix < 20 ? 'var(--am)' : 'var(--rd)';
   const dteSweetSpot = bestExp && bestExp.dte >= 11 && bestExp.dte <= 21;
   const dteColor     = dteSweetSpot ? 'var(--gn)' : bestExp && bestExp.dte <= 5 ? 'var(--rd)' : 'var(--am)';
 
@@ -1814,6 +1855,110 @@ function buildCommand() {
     </div>
   </div>`;
 
+  // ── High-VIX Bear Call Spread (OI-wall anchored) ──────────
+  const renderHVixBearCall = () => `
+  <div class="cmd-card">
+    <div class="cmd-hdr">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="cmd-expiry" style="font-size:15px">${bestExp.label}</div>
+          <span style="font-size:7.5px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(200,33,62,0.12);color:var(--rd);border:1px solid rgba(200,33,62,0.35)">🔴 HIGH VIX</span>
+        </div>
+        <div class="cmd-dte">${bestExp.dte} DTE · BEAR CALL SPREAD · VIX ${vix} — OI Wall Anchor</div>
+      </div>
+      <div class="cmd-credit-box">
+        <div class="cmd-credit-lbl">CREDIT</div>
+        <div class="cmd-credit-val" style="font-size:18px">${fv(hvixCallNet)}</div>
+        <div class="cmd-credit-range">~₹${hvixCallMid}/unit est.</div>
+      </div>
+    </div>
+    <div style="margin:0 14px;background:rgba(200,33,62,0.06);border:1px solid rgba(200,33,62,0.2);border-radius:6px;padding:8px 12px;font-size:8.5px;color:var(--rd);line-height:1.6">
+      ⚠️ <strong>High-VIX regime</strong> — premiums ~${Math.round((vix/14-1)*100)}% above normal. Selling inflated call premium at OI resistance wall.
+      <strong style="color:var(--text)"> 1 lot only.</strong> Do not scale up in panic conditions.
+    </div>
+    <div style="padding:12px 14px">
+      <div style="font-size:8px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">LEGS</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+        <span style="font-size:9px;font-weight:700;color:var(--rd);width:40px">SELL</span>
+        <span style="font-family:var(--font-mono);font-size:15px;font-weight:800">${f(hvixCallSell)} CE</span>
+        ${mnBadge(hvixCallMn)}
+        <span style="font-size:8px;color:var(--gn);margin-left:auto">collect premium</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:9px;font-weight:700;color:var(--muted);width:40px">BUY</span>
+        <span style="font-family:var(--font-mono);font-size:15px;font-weight:800">${f(hvixCallBuy)} CE</span>
+        ${mnBadge(hvixCallBuyMn)}
+        <span style="font-size:8px;color:var(--muted);margin-left:auto">+200pt hedge</span>
+      </div>
+      <div style="font-size:8px;color:var(--am)">🎯 Short strike = Call OI wall — smart money stacked here as resistance</div>
+    </div>
+    <div class="cmd-stats">
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Profit</div><div class="cmd-stat-val" style="color:var(--gn)">${fv(hvixCallNet)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Loss</div><div class="cmd-stat-val" style="color:var(--rd)">${fv(hvixCallMaxL)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">BEP</div><div class="cmd-stat-val" style="color:var(--am)">${f(Math.round(hvixCallBEP))}</div></div>
+    </div>
+    <div class="cmd-exits">
+      <div class="cmd-exit profit"><div class="cmd-exit-lbl">✅ Take Profit</div><div class="cmd-exit-val" style="color:var(--gn)">${fv(hvixCallNet*0.50)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">50% of credit — exit early</div></div>
+      <div class="cmd-exit loss"><div class="cmd-exit-lbl">🛑 Stop Loss</div><div class="cmd-exit-val" style="color:var(--rd)">${fv(hvixCallMaxL*0.50)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">Spot closes above BEP</div></div>
+    </div>
+    <div style="padding:8px 14px;background:var(--bg3);font-size:8.5px;color:var(--muted);line-height:1.6">
+      💡 Win if Nifty stays below <strong style="color:var(--rd)">${f(Math.round(hvixCallBEP))}</strong> by expiry · OI wall at ${f(hvixCallSell)} is resistance
+      <br>⚠️ If spot breaks above ${f(hvixCallSell)} with volume — exit immediately. Don't fight the move.
+    </div>
+  </div>`;
+
+  // ── High-VIX Bull Put Spread (OI-wall anchored) ────────────
+  const renderHVixBullPut = () => `
+  <div class="cmd-card">
+    <div class="cmd-hdr">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="cmd-expiry" style="font-size:15px">${bestExp.label}</div>
+          <span style="font-size:7.5px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(0,127,95,0.12);color:var(--gn);border:1px solid rgba(0,127,95,0.35)">🟢 HIGH VIX</span>
+        </div>
+        <div class="cmd-dte">${bestExp.dte} DTE · BULL PUT SPREAD · VIX ${vix} — OI Wall Anchor</div>
+      </div>
+      <div class="cmd-credit-box">
+        <div class="cmd-credit-lbl">CREDIT</div>
+        <div class="cmd-credit-val" style="font-size:18px">${fv(hvixPutNet)}</div>
+        <div class="cmd-credit-range">~₹${hvixPutMid}/unit est.</div>
+      </div>
+    </div>
+    <div style="margin:0 14px;background:rgba(0,127,95,0.06);border:1px solid rgba(0,127,95,0.2);border-radius:6px;padding:8px 12px;font-size:8.5px;color:var(--gn);line-height:1.6">
+      ⚠️ <strong>High-VIX regime</strong> — puts priced ~${Math.round((vix/14-1)*100)}% above normal. Selling inflated put premium at OI support wall.
+      <strong style="color:var(--text)"> 1 lot only.</strong> Do not scale up in panic conditions.
+    </div>
+    <div style="padding:12px 14px">
+      <div style="font-size:8px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">LEGS</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+        <span style="font-size:9px;font-weight:700;color:var(--gn);width:40px">SELL</span>
+        <span style="font-family:var(--font-mono);font-size:15px;font-weight:800">${f(hvixPutSell)} PE</span>
+        ${mnBadge(hvixPutMn)}
+        <span style="font-size:8px;color:var(--gn);margin-left:auto">collect premium</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:9px;font-weight:700;color:var(--muted);width:40px">BUY</span>
+        <span style="font-family:var(--font-mono);font-size:15px;font-weight:800">${f(hvixPutBuy)} PE</span>
+        ${mnBadge(hvixPutBuyMn)}
+        <span style="font-size:8px;color:var(--muted);margin-left:auto">−200pt hedge</span>
+      </div>
+      <div style="font-size:8px;color:var(--am)">🎯 Short strike = Put OI wall — smart money stacked here as support</div>
+    </div>
+    <div class="cmd-stats">
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Profit</div><div class="cmd-stat-val" style="color:var(--gn)">${fv(hvixPutNet)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">Max Loss</div><div class="cmd-stat-val" style="color:var(--rd)">${fv(hvixPutMaxL)}</div></div>
+      <div class="cmd-stat"><div class="cmd-stat-lbl">BEP</div><div class="cmd-stat-val" style="color:var(--am)">${f(Math.round(hvixPutBEP))}</div></div>
+    </div>
+    <div class="cmd-exits">
+      <div class="cmd-exit profit"><div class="cmd-exit-lbl">✅ Take Profit</div><div class="cmd-exit-val" style="color:var(--gn)">${fv(hvixPutNet*0.50)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">50% of credit — exit early</div></div>
+      <div class="cmd-exit loss"><div class="cmd-exit-lbl">🛑 Stop Loss</div><div class="cmd-exit-val" style="color:var(--rd)">${fv(hvixPutMaxL*0.50)}</div><div style="font-size:7.5px;color:var(--muted);margin-top:2px">Spot breaks below BEP</div></div>
+    </div>
+    <div style="padding:8px 14px;background:var(--bg3);font-size:8.5px;color:var(--muted);line-height:1.6">
+      💡 Win if Nifty stays above <strong style="color:var(--gn)">${f(Math.round(hvixPutBEP))}</strong> by expiry · OI wall at ${f(hvixPutSell)} is support
+      <br>⚠️ If spot breaks below ${f(hvixPutSell)} with volume — exit immediately. Don't fight the fall.
+    </div>
+  </div>`;
+
   // ══════════════════════════════════════════════════════════
   // MAIN RENDER
   // ══════════════════════════════════════════════════════════
@@ -1828,6 +1973,8 @@ function buildCommand() {
       case 'BEAR_CALL':        return renderBearCall(false);
       case 'BEAR_PUT':         return renderBearPut(false);
       case 'STRADDLE':         return renderStraddle();
+      case 'HVIX_BEAR_CALL':   return renderHVixBearCall();
+      case 'HVIX_BULL_PUT':    return renderHVixBullPut();
       default: return '';
     }
   };
@@ -2281,8 +2428,9 @@ function go(n){
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('on',i===n));
   document.querySelectorAll('.panel').forEach((p,i)=>p.classList.toggle('on',i===n));
   if(n===2) calcScore();
-  if(n===3) updateEntrySignal(); // v2.2.0: no auto buildCommand — user hits Analyse button
+  if(n===3) updateEntrySignal();
   if(n===4) checkLocks();
+  if(n===5){ dbShowStatus(); loadTradeHistory(); }
 }
 
 function switchStrat(n){
@@ -2298,7 +2446,6 @@ function saveRadar(){
   const data={};
   radarFlds.forEach(f=>{ const e=document.getElementById(f); if(e&&e.value!=='') data[f]=e.value; stampField(f); });
   try{
-    // v2.2.1: stamp save date so tomorrow morning we know it's stale
     data._savedDate = new Date().toDateString();
     localStorage.setItem('mr140-radar',JSON.stringify(data));
     localStorage.setItem('mr140-prevscore',JSON.stringify({score:SCORE,dir:DIRECTION,ts:Date.now()}));
@@ -2308,6 +2455,18 @@ function saveRadar(){
     document.getElementById('btn-edit-radar').style.display='inline-flex';
     document.getElementById('radar-status').textContent='Saved ✅';
     toast('💾 Radar saved & locked');
+    // ── v3.0: also persist to Supabase ──
+    if(typeof dbSaveRadar === 'function'){
+      dbSaveRadar({
+        ...data,
+        score: SCORE,
+        direction: DIRECTION,
+        strat_auto: STRAT_AUTO,
+        rbi:  document.querySelector('input[name="rbi"]:checked')?.value||'neutral',
+        liq:  document.querySelector('input[name="liq"]:checked')?.value||'neutral',
+        news: document.querySelector('input[name="news"]:checked')?.value||'none',
+      }).then(r=>{ if(!r.ok) console.warn('[db] saveRadar error:', r.error); });
+    }
   }catch{ toast('❌ Save failed'); }
 }
 
@@ -2494,7 +2653,121 @@ function loadState(){
   }
 }
 
-// ── Toast ──────────────────────────────────────────────────────
+// ── Trade Journal — v3.0 Supabase-backed ───────────────────────
+async function logTradeNow(){
+  const strat   = document.getElementById('tj-strat')?.value;
+  const expiryRaw = document.getElementById('tj-expiry')?.value?.trim();
+  const l1s     = parseFloat(document.getElementById('tj-l1-strike')?.value);
+  const l1e     = parseFloat(document.getElementById('tj-l1-entry')?.value);
+  const l2s     = parseFloat(document.getElementById('tj-l2-strike')?.value);
+  const l2e     = parseFloat(document.getElementById('tj-l2-entry')?.value);
+  const lots    = parseInt(document.getElementById('tj-lots')?.value)||1;
+  const spot    = parseFloat(document.getElementById('tj-spot')?.value)||null;
+  const notes   = document.getElementById('tj-notes')?.value?.trim()||null;
+  const res     = document.getElementById('tj-result');
+
+  if(!strat||!expiryRaw||isNaN(l1s)||isNaN(l1e)){
+    if(res) res.innerHTML='<span style="color:var(--rd)">⚠️ Strategy, Expiry, Leg 1 Strike & Entry are required</span>';
+    return;
+  }
+
+  // Parse expiry to YYYY-MM-DD
+  const months={'Jan':1,'Feb':2,'Mar':3,'Apr':4,'May':5,'Jun':6,'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12};
+  let expiry_date = null;
+  const m = expiryRaw.match(/(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/);
+  if(m) expiry_date = `${m[3]}-${String(months[m[2]]||1).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+  if(!expiry_date){ if(res) res.innerHTML='<span style="color:var(--rd)">⚠️ Expiry format: 17 Mar 2026</span>'; return; }
+
+  // Determine leg types based on strategy
+  const legTypes = {
+    BEAR_PUT:  [{t:'PE',a:'BUY'},{t:'PE',a:'SELL'}],
+    BEAR_CALL: [{t:'CE',a:'SELL'},{t:'CE',a:'BUY'}],
+    BULL_PUT:  [{t:'PE',a:'SELL'},{t:'PE',a:'BUY'}],
+    BULL_CALL: [{t:'CE',a:'BUY'},{t:'CE',a:'SELL'}],
+    IC:        [{t:'CE',a:'SELL'},{t:'CE',a:'BUY'},{t:'PE',a:'SELL'},{t:'PE',a:'BUY'}],
+    STRADDLE:  [{t:'CE',a:'BUY'},{t:'PE',a:'BUY'}],
+    STRANGLE:  [{t:'CE',a:'BUY'},{t:'PE',a:'BUY'}],
+  };
+  const legs = legTypes[strat]||[{t:'CE',a:'BUY'}];
+
+  const tradeData = {
+    strategy:      strat,
+    expiry_date:   expiry_date,
+    leg1_type:     legs[0]?.t||null,
+    leg1_action:   legs[0]?.a||null,
+    leg1_strike:   l1s,
+    leg1_entry:    l1e,
+    leg2_type:     !isNaN(l2s)?(legs[1]?.t||null):null,
+    leg2_action:   !isNaN(l2s)?(legs[1]?.a||null):null,
+    leg2_strike:   !isNaN(l2s)?l2s:null,
+    leg2_entry:    !isNaN(l2e)?l2e:null,
+    lots:          lots,
+    lot_size:      65,
+    net_credit:    (!isNaN(l1e)&&!isNaN(l2e)) ? (l2e - l1e) : null,
+    spot_at_entry: spot,
+    vix_at_entry:  gv('india_vix')||gv('strat_vix')||null,
+    score_at_entry: SCORE||null,
+    notes:         notes,
+  };
+
+  if(res) res.innerHTML='<span style="color:var(--am)">⏳ Saving...</span>';
+
+  if(typeof dbLogTrade === 'function'){
+    const r = await dbLogTrade(tradeData);
+    if(r.ok){
+      if(res) res.innerHTML=`<span style="color:var(--gn)">✅ Trade #${r.id} logged to database</span>`;
+      toast('📝 Trade logged!');
+      // Clear form
+      ['tj-l1-strike','tj-l1-entry','tj-l2-strike','tj-l2-entry','tj-spot','tj-notes'].forEach(id=>{
+        const e=document.getElementById(id); if(e) e.value='';
+      });
+      setTimeout(loadTradeHistory, 800);
+    } else {
+      if(res) res.innerHTML=`<span style="color:var(--rd)">❌ ${r.error}</span>`;
+    }
+  } else {
+    if(res) res.innerHTML='<span style="color:var(--rd)">❌ DB not loaded</span>';
+  }
+}
+
+async function loadTradeHistory(){
+  const el = document.getElementById('trade-history');
+  if(!el) return;
+  el.innerHTML='<div style="font-size:9px;color:var(--muted);padding:8px 0">⏳ Loading...</div>';
+  if(typeof dbGetTrades !== 'function'){
+    el.innerHTML='<div style="font-size:9px;color:var(--muted)">DB not available</div>'; return;
+  }
+  const { ok, trades, error } = await dbGetTrades(30);
+  if(!ok){
+    el.innerHTML=`<div style="font-size:9px;color:var(--rd)">${error||'Load failed'}</div>`; return;
+  }
+  if(!trades.length){
+    el.innerHTML='<div style="font-size:9px;color:var(--muted);padding:8px 0">No trades yet. Log your first trade above.</div>'; return;
+  }
+  const stratColors={IC:'var(--tl)',BEAR_PUT:'var(--rd)',BEAR_CALL:'var(--rd)',BULL_PUT:'var(--gn)',BULL_CALL:'var(--gn)',STRADDLE:'var(--pu)',STRANGLE:'var(--pu)'};
+  const rows = trades.map(t=>{
+    const col = stratColors[t.strategy]||'var(--muted)';
+    const status = t.status==='OPEN'
+      ? '<span style="font-size:7px;font-weight:700;color:var(--am);background:var(--am-bg);border:1px solid var(--am-br);padding:1px 5px;border-radius:3px">OPEN</span>'
+      : t.pnl_rs>=0
+      ? `<span style="font-size:7px;font-weight:700;color:var(--gn);background:var(--gn-bg);border:1px solid var(--gn-br);padding:1px 5px;border-radius:3px">+₹${Math.round(t.pnl_rs).toLocaleString('en-IN')}</span>`
+      : `<span style="font-size:7px;font-weight:700;color:var(--rd);background:var(--rd-bg);border:1px solid var(--rd-br);padding:1px 5px;border-radius:3px">-₹${Math.abs(Math.round(t.pnl_rs)).toLocaleString('en-IN')}</span>`;
+    const leg1 = t.leg1_action&&t.leg1_strike ? `${t.leg1_action} ${t.leg1_strike}${t.leg1_type}` : '';
+    const leg2 = t.leg2_action&&t.leg2_strike ? ` / ${t.leg2_action} ${t.leg2_strike}${t.leg2_type}` : '';
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="font-size:10px;font-weight:700;color:${col}">${t.strategy.replace('_',' ')}</div>
+        ${status}
+      </div>
+      <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;margin-bottom:2px">${leg1}${leg2}</div>
+      <div style="font-size:8px;color:var(--muted)">${t.trade_date} · Exp: ${t.expiry_date} · ${t.lots} lot · VIX ${t.vix_at_entry||'—'}</div>
+      ${t.notes?`<div style="font-size:8px;color:var(--muted);margin-top:3px;font-style:italic">${t.notes}</div>`:''}
+    </div>`;
+  });
+  el.innerHTML = rows.join('');
+}
+
+
 let _tt;
 function toast(m){
   const e=document.getElementById('toast'); e.textContent=m; e.classList.add('show');
@@ -2519,3 +2792,5 @@ updateEntrySignal();
 updateBhavStatus();
 loadFBConfig();
 setTimeout(()=>{ renderBhavCalendar(); checkBhavGaps(); }, 500);
+// v3.0: Supabase connection check on load
+setTimeout(()=>{ if(typeof dbShowStatus==='function') dbShowStatus(); }, 1000);
