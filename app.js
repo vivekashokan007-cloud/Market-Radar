@@ -25,23 +25,30 @@ let ANALYSIS_VIX = null;  // v2.2.0: VIX at time of last Analyse tap
 // Its 4.76% weight redistributed: +2.38% to FII (most predictive), +2.38% to GIFT gap.
 // PCR is KEPT for strike placement only (pcrPutAdj / pcrCallAdj / pcrPremAdj).
 const W = {
-  gift_gap:   0.2143,  // was 0.1905 (+0.0238 from PCR)
-  gift_trend: 0.0572,
-  sp500:      0.1619,
-  dow:        0.0571,
-  usvix:      0.0476,
-  nk:         0.0571,
-  hsi:        0.0286,
-  crude:      0.0667,
-  gold:       0.0286,
-  inr:        0.0286,
-  yld:        0.0381,
-  fii:        0.1000,  // was 0.0762 (+0.0238 from PCR)
+  // v4.0: global market signals removed (not available from Upstox)
+  // gift_gap, gift_trend, sp500, dow, usvix, nk, hsi, crude, gold, inr, yld → null/skipped
+  // india_vix and pcr_nf added as live signals (from Upstox option chain)
+  // Weights normalise automatically via usedW — do not need to sum to 1
+  gift_gap:   0.2143,  // kept for compat — will be null/skipped in v4.0
+  gift_trend: 0.0572,  // kept for compat — will be null/skipped in v4.0
+  sp500:      0.1619,  // null/skipped
+  dow:        0.0571,  // null/skipped
+  usvix:      0.0476,  // null/skipped
+  nk:         0.0571,  // null/skipped
+  hsi:        0.0286,  // null/skipped
+  crude:      0.0667,  // null/skipped
+  gold:       0.0286,  // null/skipped
+  inr:        0.0286,  // null/skipped
+  yld:        0.0381,  // null/skipped
+  fii:        0.1000,
   close_char: 0.0381,
   max_pain:   0.0286,
   n50adv:     0.0190,
   n50dma:     0.0095,
   bnfadv:     0.0190,
+  // v4.0 NEW — live signals from Upstox
+  india_vix:  0.1800,  // high weight: live VIX is most reliable fear/greed signal
+  pcr_nf:     0.1000,  // re-enabled: live PCR from option chain (was removed for manual-entry unreliability)
 };
 
 // ── NSE Holiday Calendar 2026 ──────────────────────────────────
@@ -182,73 +189,28 @@ function getIST(){
 
 function checkLocks(){
   const { total: t } = getIST();
-  const MORNING=8*60+30;
   const EVENING=15*60+45;
   const isWeekend = isWeekendOrHoliday();
-
-  // Radar (morning lock): only open on trading days after 8:30am
-  const mornOk = !isWeekend && t>=MORNING;
-  // Breadth: hard unlock at 9:30, soft advisory shown until 10:15 (data still settling)
-  const BREADTH_OPEN = 9*60+30;
-  // Smarts (evening lock): open on trading days after 3:45pm
-  //   AND stays open all weekend (Sat + Sun) so Friday data can be entered anytime
   const eveOk  = isWeekend || t>=EVENING;
 
-  const mBanner=document.getElementById('morning-lock');
-  if(!mornOk && !RADAR_LOCKED){
-    // Weekend: show "Monday 8:30 AM" instead of countdown
-    if(isWeekend){
-      const ist = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Kolkata'}));
-      const next = new Date(ist);
-      // Find next Monday
-      const daysUntilMon = (1 - ist.getDay() + 7) % 7 || 7;
-      next.setDate(ist.getDate() + daysUntilMon);
-      const mon = next.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'});
-      document.getElementById('morning-msg').textContent=`Weekend — opens ${mon} at 8:30 AM IST`;
-      document.getElementById('morning-lock').querySelector('.lock-sub').textContent='Market data entry unlocks Monday morning';
-      document.getElementById('breadth-msg').textContent=`Weekend — enter breadth data on ${mon}`;
-    } else {
-      const ml=MORNING-t;
-      document.getElementById('morning-msg').textContent=`Opens in ${Math.floor(ml/60)}h ${ml%60}m (8:30 AM IST)`;
-      document.getElementById('breadth-msg').textContent=`Opens in ${Math.floor(ml/60)}h ${ml%60}m (8:30 AM IST)`;
-    }
-    mBanner.classList.add('show');
-    setDisabled(['sp500','dow','usvix','nk','hsi','crude','gold','inr','yld',
-      'gift_now','nifty_prev','gift_6am','india_vix','fii','fii_fut','fii_opt','dii',
-      'max_pain_nf','max_pain_bn','close_char'], true);
-    setDisabled(['n50adv','n50dma','bnfadv'],true);
-    document.getElementById('breadth-lock').classList.add('show');
-  } else if(!isWeekend && t < BREADTH_OPEN && !BREADTH_LOCKED){
-    // Before 9:30 — hard lock
-    mBanner.classList.remove('show');
-    document.getElementById('breadth-lock').classList.add('show');
-    const bl = BREADTH_OPEN - t;
-    document.getElementById('breadth-msg').textContent=`Opens at 9:30 AM (${Math.floor(bl/60)}h ${bl%60}m)`;
-    setDisabled(['n50adv','n50dma','bnfadv'],true);
-  } else {
-    mBanner.classList.remove('show');
-    if(!BREADTH_LOCKED) document.getElementById('breadth-lock').classList.remove('show');
-    // Soft timing advisory after 9:30 (replaces hard lock)
-    updateBreadthTimingTip(t);
-  }
+  // Market status dot
+  const mktOpen = !isWeekendOrHoliday() && t>=9*60+15 && t<=15*60+30;
+  document.getElementById('mkt-dot').style.background=mktOpen?'var(--gn)':'var(--rd)';
+  document.getElementById('mkt-label').textContent=mktOpen?'OPEN':(isWeekendOrHoliday()?'WEEKEND':'CLOSED');
 
+  // Evening lock (CLOSE tab only)
   const eBanner=document.getElementById('evening-lock');
   const eContent=document.getElementById('evening-content');
   if(!eveOk){
     const el=EVENING-t;
     document.getElementById('evening-msg').textContent=`Opens in ${Math.floor(el/60)}h ${el%60}m (3:45 PM IST)`;
-    eBanner.classList.add('show');
-    eContent.style.display='none';
+    if(eBanner) eBanner.classList.add('show');
+    if(eContent) eContent.style.display='none';
   } else {
-    eBanner.classList.remove('show');
-    eContent.style.display='block';
+    if(eBanner) eBanner.classList.remove('show');
+    if(eContent) eContent.style.display='block';
   }
 
-  const mktOpen = !isWeekendOrHoliday() && t>=9*60+15 && t<=15*60+30;
-  document.getElementById('mkt-dot').style.background=mktOpen?'var(--gn)':'var(--rd)';
-  document.getElementById('mkt-label').textContent=mktOpen?'OPEN':(isWeekendOrHoliday()?'WEEKEND':'CLOSED');
-
-  // Update entry time signal
   updateEntrySignal();
 }
 
@@ -419,6 +381,13 @@ function scoreParam(key, val, extra){
       return val>=70?2:val>=55?1:val>=40?0:val>=25?-1:-2;
     case 'bnfadv':
       return val>=12?2:val>=8?1:val>=6?0:val>=4?-1:-2;
+    // v4.0: live signals from Upstox
+    case 'india_vix':
+      // High VIX = fear = bearish; Low VIX = calm = bullish for IC/credit
+      return val>25?-2:val>20?-1:val>16?0:val>13?1:2;
+    case 'pcr_nf_live':
+      // Live PCR from option chain (re-enabled in v4.0 — manual entry was unreliable)
+      return val>=1.5?2:val>=1.2?1:val>=1.0?0:val>=0.8?-1:-2;
     default: return 0;
   }
 }
@@ -504,6 +473,16 @@ function calcScore(){
   if(valid(ev.bnfadv)) addParam('bnfadv',scoreParam('bnfadv',ev.bnfadv),`${ev.bnfadv}/14`,W.bnfadv);
   else addParam('bnfadv',null,'—',W.bnfadv);
 
+  // v4.0: Live signals from Upstox (auto-filled — high confidence)
+  if(valid(ev.india_vix)){
+    addParam('india_vix', scoreParam('india_vix',ev.india_vix), `VIX ${ev.india_vix}`, W.india_vix);
+  } else addParam('india_vix',null,'—',W.india_vix);
+
+  // v4.0: PCR re-enabled — live data from option chain (not manual entry)
+  if(valid(ev.pcr_nf)){
+    addParam('pcr_nf_live', scoreParam('pcr_nf_live',ev.pcr_nf), `PCR ${ev.pcr_nf.toFixed(2)}`, W.pcr_nf);
+  } else addParam('pcr_nf_live',null,'—',W.pcr_nf);
+
   const totalUsableW = contributions.filter(c=>c.s!==null).reduce((a,c)=>a+c.wt,0);
   const finalScore = totalUsableW > 0 ? sc / totalUsableW : 0;
   SCORE = Math.round(finalScore*1000)/1000;
@@ -529,7 +508,7 @@ function calcScore(){
   else                STRAT_AUTO='IRON CONDOR';
 
   renderVerdict(SCORE, DIRECTION, bull, bear, neut, contributions, totalUsableW, bnfAdj, ev, vix);
-  renderBreadth();
+  // renderBreadth() removed v4.0 — breadth tab gone
   buildCommand();
 }
 
@@ -2053,17 +2032,13 @@ function buildCommand() {
     </div>
   </div>` : '';
 
-  out.innerHTML = vixCompHtml + `
+  // Determine if BNF should be the primary displayed strategy
+  const bnfIsPrimary = RECOMMENDED_INDEX === 'BNF' && bnfPrice && bnfAtr && bnfViz.state !== 'avoid';
+  const bnfCardHtml = (bnfPrice && bnfAtr && bnfViz.state !== 'avoid')
+    ? buildBNFCommandCard(bnfViz.state, bnfPrice, bnfAtr, vix, score, bnfPcr, gv('bn_oi_call'), gv('bn_oi_put'))
+    : '';
 
-  <!-- Verdict Alignment Banner — shows when Verdict recommends BNF but Strategy is NF -->
-  ${RECOMMENDED_INDEX === 'BNF' ? `
-  <div style="background:rgba(0,110,150,0.08);border:1px solid rgba(0,110,150,0.30);border-radius:8px;margin:10px 14px 0;padding:10px 14px;display:flex;align-items:center;gap:10px">
-    <div style="font-size:20px;flex-shrink:0">🏦</div>
-    <div>
-      <div style="font-size:10px;font-weight:800;color:var(--tl);letter-spacing:0.5px">VERDICT RECOMMENDS BANK NIFTY</div>
-      <div style="font-size:8.5px;color:var(--muted);margin-top:2px">Nifty 50 shown here · Scroll to Bank Nifty section below for BNF strategy</div>
-    </div>
-  </div>` : ''}
+  out.innerHTML = vixCompHtml + `
 
   <!-- BS Expected Range Strip — always shown when BS available -->
   ${bs?.expectedMove ? `
@@ -2109,7 +2084,23 @@ function buildCommand() {
     </div>
   </div>
 
-  ${primaryStrat === 'AVOID' ? `
+  <!-- GO/NO-GO verdict badge for primary index -->
+  ${bnfIsPrimary ? `
+  <div style="margin:10px 14px 0;background:rgba(0,110,150,0.08);border:1px solid rgba(0,110,150,0.30);border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:10px">
+    <div style="font-size:18px;flex-shrink:0">🏦</div>
+    <div style="font-size:9px;font-weight:800;color:var(--tl);letter-spacing:0.5px">BANK NIFTY — PRIMARY (from Verdict)</div>
+  </div>
+  ${bnfCardHtml}
+  <div class="alt-section" id="alt-strat-section" style="margin:8px 14px 0">
+    <div class="alt-toggle" onclick="this.closest('.alt-section').classList.toggle('open')">
+      <div class="alt-toggle-lbl">📊 Nifty 50 strategy (secondary)</div>
+      <div class="alt-toggle-chevron">▼</div>
+    </div>
+    <div class="alt-body" style="padding-top:4px">
+      ${primaryStrat !== 'AVOID' ? primaryCard() : '<div style="padding:10px 14px;font-size:9px;color:var(--muted)">NF conditions not ideal today</div>'}
+    </div>
+  </div>
+  ` : primaryStrat === 'AVOID' ? `
   <div style="margin:10px 14px 0;background:var(--bg2);border-radius:var(--r);padding:14px;border:1px solid var(--border)">
     <div style="font-size:10px;color:var(--muted);line-height:1.8">
       ${bestExp ? `📅 Next tradeable expiry: <strong style="color:var(--text)">${bestExp.label} (${bestExp.dte} DTE)</strong>` : ''}
@@ -2160,7 +2151,8 @@ function buildCommand() {
     ${maxPainNote ? `<div style="font-size:8.5px;color:var(--am);margin-top:6px">📍 ${maxPainNote}</div>` : ''}
   </div>
 
-  <!-- BNF Viability -->
+  <!-- BNF Viability — shown only when NF is primary; hidden when BNF is primary (already shown above) -->
+  ${!bnfIsPrimary ? `
   <div class="bnf-viability ${bnfViz.cls}" style="margin-bottom:6px">
     <div class="bnf-v-hdr">
       <div class="bnf-v-icon">${bnfViz.icon}</div>
@@ -2170,8 +2162,8 @@ function buildCommand() {
       </div>
     </div>
     <div class="bnf-v-reason">${bnfViz.reasons.join('<br>')}</div>
-    ${bnfViz.state !== 'avoid' && bnfPrice && bnfAtr ? buildBNFCommandCard(bnfViz.state, bnfPrice, bnfAtr, vix, score, bnfPcr, gv('bn_oi_call'), gv('bn_oi_put')) : ''}
-  </div>
+    ${bnfViz.state !== 'avoid' && bnfPrice && bnfAtr ? bnfCardHtml : ''}
+  </div>` : ''}
 
   <!-- Other expiries — collapsed -->
   <div class="alt-section" id="alt-section">
@@ -2491,11 +2483,10 @@ function toggleExpiry(id){
 function go(n){
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('on',i===n));
   document.querySelectorAll('.panel').forEach((p,i)=>p.classList.toggle('on',i===n));
-  if(n===2) calcScore();
-  if(n===3) updateEntrySignal();
-  if(n===4) checkLocks();
-  if(n===5){ dbShowStatus(); loadTradeHistory(); }
-  if(n===6){ updateBhavStatus(); renderBhavCalendar(); checkBhavGaps(); }
+  if(n===0){ calcScore(); }
+  if(n===1){ updateEntrySignal(); buildCommand(); }
+  if(n===2){ upstoxRefreshPositions && upstoxRefreshPositions(); }
+  if(n===4){ checkLocks(); }
 }
 
 function switchStrat(n){
@@ -2587,8 +2578,12 @@ function editBreadth(){
 }
 
 function saveEvening(){
-  const flds=['ev_sp500','ev_dow','ev_usvix','ev_nk','ev_hsi','ev_crude','ev_gold','ev_inr',
-    'ev_indiavix','ev_fii','ev_fii_opt','ev_pcr_nf','ev_pcr_bn','ev_nifty','ev_bnf','ev_n50adv','ev_bnfadv','ev_mpnf','ev_mpbn'];
+  // v4.0: updated field list — ev_fii_fut, ev_dii added; old global markets removed
+  const flds=['ev_indiavix','ev_fii','ev_fii_fut','ev_fii_opt','ev_dii',
+    'ev_pcr_nf','ev_nifty','ev_bnf','ev_n50adv','ev_mpnf',
+    // legacy fields kept for compat
+    'ev_sp500','ev_dow','ev_usvix','ev_nk','ev_hsi','ev_crude','ev_gold','ev_inr',
+    'ev_fii_opt','ev_pcr_bn','ev_bnfadv','ev_mpbn'];
   const data={};
   flds.forEach(f=>{ const e=document.getElementById(f); if(e) data[f]=e.value; stampField(f); });
   try{
@@ -2599,23 +2594,24 @@ function saveEvening(){
     document.getElementById('btn-edit-evening').style.display='inline-flex';
     if(document.getElementById('btn-lock-bottom')) document.getElementById('btn-lock-bottom').style.display='none';
 
-    // ── v2.2.1: Auto-compute close character from evening data ──
-    // Uses advances (primary) + FII cash (adjustment) → stored for
-    // tomorrow's Radar tab pre-fill. Never overwrites if Radar already locked.
+    // ── Auto-compute close character from evening data ──
     const adv = parseFloat(document.getElementById('ev_n50adv')?.value);
     const fii = parseFloat(document.getElementById('ev_fii')?.value) || 0;
     if (!isNaN(adv)) {
-      // Advances score: 50-stock index breadth
       const advScore = adv >= 38 ? 2 : adv >= 28 ? 1 : adv >= 20 ? 0 : adv >= 12 ? -1 : -2;
-      // FII adjustment: large institutional flow shifts by 0.5
       const fiiAdj   = fii >= 1000 ? 0.5 : fii >= 200 ? 0.25 : fii <= -1000 ? -0.5 : fii <= -200 ? -0.25 : 0;
       const autoCC   = Math.round(Math.max(-2, Math.min(2, advScore + fiiAdj)));
-      localStorage.setItem('mr140-autoclosechar', JSON.stringify({
-        val: autoCC,
-        adv, fii,
-        lockedAt: Date.now()
-      }));
+      localStorage.setItem('mr140-autoclosechar', JSON.stringify({ val: autoCC, adv, fii, lockedAt: Date.now() }));
     }
+
+    // v4.0: save FII separately for next-morning SIGNAL auto-load
+    localStorage.setItem('mr140-evening-fii', JSON.stringify({
+      fii:     data.ev_fii     || '',
+      fii_fut: data.ev_fii_fut || '',
+      fii_opt: data.ev_fii_opt || '',
+      dii:     data.ev_dii     || '',
+      savedDate: new Date().toDateString()
+    }));
 
     toast('🔒 Evening data locked — delta ready for tomorrow');
     // v3.1: sync to Supabase daily_data
@@ -2694,63 +2690,57 @@ function loadState(){
     Object.keys(s).forEach(f=>{ const e=document.getElementById(f); if(e&&s[f]!=='undefined') e.value=s[f]; });
   }catch{}
 
-  const radarFlds=['sp500','dow','usvix','nk','hsi','crude','gold','inr','yld',
-    'gift_now','nifty_prev','gift_6am','india_vix','fii','fii_fut','fii_opt','dii','max_pain_nf','max_pain_bn','close_char'];
+  const todayDate = new Date().toDateString();
 
-  const radarRaw = localStorage.getItem('mr140-radar');
-  const radarData = radarRaw ? JSON.parse(radarRaw) : null;
-
-  // v2.2.1: Check if radar save is from TODAY or a previous day
-  const savedDate   = radarData?._savedDate || null;
-  const todayDate   = new Date().toDateString();
-  const isSameDay   = savedDate === todayDate;
-
-  if(radarData && isSameDay){
-    // Same day — restore locked state as normal
-    // Populate fields from radar save (authoritative source)
-    radarFlds.forEach(f=>{ const e=document.getElementById(f); if(e&&radarData[f]!=null) e.value=radarData[f]; });
-    RADAR_LOCKED=true;
-    setDisabled(radarFlds,true);
-    document.getElementById('btn-save-radar').style.display='none';
-    document.getElementById('btn-edit-radar').style.display='inline-flex';
-    document.getElementById('radar-status').textContent='Saved ✅ (from this morning)';
-
-  } else {
-    // Different day OR no radar save — fresh morning session
-    // Clear stale radar lock so user enters today's data fresh
-    if(radarData && !isSameDay){
-      localStorage.removeItem('mr140-radar');
-      // Also clear stale breadth lock — it's a new day
-      localStorage.removeItem('mr140-breadth');
+  // v4.0: Auto-load FII from yesterday's evening CLOSE save
+  // Only loads if no value already in the field (don't overwrite user edits)
+  try{
+    const ef = JSON.parse(localStorage.getItem('mr140-evening-fii')||'null');
+    if(ef){
+      const fiiEl = document.getElementById('fii');
+      if(fiiEl && !fiiEl.value && ef.fii) fiiEl.value = ef.fii;
+      const futEl = document.getElementById('fii_fut');
+      if(futEl && !futEl.value && ef.fii_fut) futEl.value = ef.fii_fut;
+      const optEl = document.getElementById('fii_opt');
+      if(optEl && !optEl.value && ef.fii_opt) optEl.value = ef.fii_opt;
+      const diiEl = document.getElementById('dii');
+      if(diiEl && !diiEl.value && ef.dii) diiEl.value = ef.dii;
+      // Show timestamp note
+      const tsFii = document.getElementById('ts-fii');
+      if(tsFii && ef.savedDate) {
+        const isYest = ef.savedDate !== todayDate;
+        tsFii.textContent = isYest ? `From ${ef.savedDate} CLOSE` : 'From today\'s CLOSE';
+        tsFii.className = isYest ? 'ts stale' : 'ts fresh';
+      }
     }
+  }catch{}
 
-    // v2.2.1: Auto-fill close_char from last evening lock
-    // This is the ONLY place close_char gets set on a fresh morning.
-    // It is excluded from saveState() so nothing can overwrite it.
-    try{
-      const acc = JSON.parse(localStorage.getItem('mr140-autoclosechar')||'null');
-      if(acc && typeof acc.val === 'number'){
-        const el = document.getElementById('close_char');
-        if(el){
-          el.value = String(acc.val);
-          const labels = {'2':'Strong ↑↑','1':'Mild ↑','0':'Neutral','-1':'Mild ↓','-2':'Weak ↓↓'};
-          const note = document.getElementById('ts-close_char');
-          if(note){
-            note.textContent = `Auto: ${labels[String(acc.val)]||acc.val} · ${acc.adv} adv, FII ${acc.fii>=0?'+':''}${acc.fii}Cr`;
-            note.className='ts fresh';
-          }
+  // Auto-fill close_char from last evening lock
+  try{
+    const acc = JSON.parse(localStorage.getItem('mr140-autoclosechar')||'null');
+    if(acc && typeof acc.val === 'number'){
+      const el = document.getElementById('close_char');
+      if(el && el.value === '0'){  // only if still at default
+        el.value = String(acc.val);
+        const labels = {'2':'Strong ↑↑','1':'Mild ↑','0':'Neutral','-1':'Mild ↓','-2':'Weak ↓↓'};
+        const note = document.getElementById('ts-close_char');
+        if(note){
+          note.textContent = `Auto: ${labels[String(acc.val)]||acc.val} · ${acc.adv} adv, FII ${acc.fii>=0?'+':''}${acc.fii}Cr`;
+          note.className='ts fresh';
         }
       }
-    }catch{}
-  }
+    }
+  }catch{}
 
-  const breadth=localStorage.getItem('mr140-breadth');
-  if(breadth){
-    BREADTH_LOCKED=true;
-    setDisabled(['n50adv','n50dma','bnfadv'],true);
-    document.getElementById('btn-save-breadth').style.display='none';
-    document.getElementById('btn-edit-breadth').style.display='inline-flex';
-  }
+  // Restore evening lock state if previously locked today
+  try{
+    const ev = JSON.parse(localStorage.getItem('mr140-evening')||'null');
+    if(ev){
+      const evFlds=['ev_indiavix','ev_fii','ev_fii_fut','ev_fii_opt','ev_dii',
+        'ev_pcr_nf','ev_nifty','ev_bnf','ev_n50adv','ev_mpnf'];
+      evFlds.forEach(f=>{ const e=document.getElementById(f); if(e&&ev[f]!=null) e.value=ev[f]; });
+    }
+  }catch{}
 }
 
 // ── Trade Journal — v3.0 Supabase-backed ───────────────────────
@@ -2897,9 +2887,7 @@ function _scheduleStratSave() {
   document.getElementById(id)?.addEventListener('input', _scheduleStratSave);
 });
 
-if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
-
-// ── Init ──────────────────────────────────────────────────────
+// ── Init v4.0 ─────────────────────────────────────────────────
 loadState();
 onFIIFO();
 loadChecklist();
@@ -2908,10 +2896,13 @@ checkLocks();
 setInterval(checkLocks, 60000);
 setInterval(updateEntrySignal, 60000);
 calcScore();
-renderBreadth();
 updateEntrySignal();
-updateBhavStatus();
-loadFBConfig();
-setTimeout(()=>{ renderBhavCalendar(); checkBhavGaps(); }, 500);
-// v3.1: auto-sync from Supabase on every load (today + yesterday)
+// Legacy bhav compat — only run if bhav functions exist
+if(typeof updateBhavStatus==='function') updateBhavStatus();
+if(typeof loadFBConfig==='function') loadFBConfig();
+setTimeout(()=>{
+  if(typeof renderBhavCalendar==='function') renderBhavCalendar();
+  if(typeof checkBhavGaps==='function') checkBhavGaps();
+}, 500);
+// v3.1: auto-sync from Supabase on every load
 setTimeout(()=>{ if(typeof dbAutoSync==='function') dbAutoSync(); }, 800);
