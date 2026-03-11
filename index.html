@@ -36,9 +36,7 @@
   <div class="tab" id="t3">🌙 CLOSE</div>
 </div>
 
-<!-- ═══════════════════════════════════════════ -->
-<!-- PANEL 0: SIGNAL TAB -->
-<!-- ═══════════════════════════════════════════ -->
+<!-- PANEL 0: SIGNAL -->
 <div class="panel active" id="p0">
   <button class="btn btn-fetch" id="btn-fetch-upstox">🔄 FETCH UPSTOX DATA</button>
   <button class="btn" id="btn-debug" style="width:100%;font-size:11px;padding:6px;margin-bottom:8px;color:var(--text-dim)">🔍 Show Chain Debug</button>
@@ -123,134 +121,75 @@
     <span id="ts-bnfadv" class="ts-badge"></span>
   </div>
 
-  <div class="section-title">BNF Health Check</div>
-  <div class="radio-group">
-    <label><input type="radio" name="bnf_trend" value="up"> Uptrend</label>
-    <label><input type="radio" name="bnf_trend" value="flat"> Flat</label>
-    <label><input type="radio" name="bnf_trend" value="down"> Downtrend</label>
-  </div>
-  <div class="radio-group">
-    <label><input type="radio" name="bnf_vol" value="high"> High Vol</label>
-    <label><input type="radio" name="bnf_vol" value="normal"> Normal</label>
-    <label><input type="radio" name="bnf_vol" value="low"> Low Vol</label>
-  </div>
-
   <button class="btn btn-lock" id="btn-lock-radar">🔓 Lock Morning Data</button>
   <button class="btn btn-lock" id="btn-lock-breadth">🔓 Lock Breadth</button>
 
   <div id="verdict"></div>
 </div>
 
-<!-- ═══════════════════════════════════════════ -->
-<!-- PANEL 1: COMMAND TAB -->
-<!-- ═══════════════════════════════════════════ -->
+<!-- PANEL 1: COMMAND -->
 <div class="panel" id="p1">
   <div id="command-output">
     <div class="cmd-placeholder">Fetch Upstox data to see strategy recommendations</div>
   </div>
-
   <div class="section-title" style="margin-top:20px">Upstox Positions</div>
-  <div id="upstox-positions">
-    <div class="pos-empty">No data — fetch first</div>
-  </div>
-
+  <div id="upstox-positions"><div class="pos-empty">No data — fetch first</div></div>
   <div id="hidden-inputs">
-    <input type="number" id="nf_price">
-    <input type="number" id="bn_price">
-    <input type="number" id="strat_vix">
-    <input type="number" id="nf_atr">
-    <input type="number" id="bn_atr">
-    <input type="number" id="nifty_prev">
-    <input type="number" id="pcr_bn">
-    <input type="number" id="nf_oi_call">
-    <input type="number" id="nf_oi_put">
-    <input type="number" id="bn_oi_call">
-    <input type="number" id="bn_oi_put">
-    <input type="number" id="nf_maxpain">
+    <input type="number" id="nf_price"><input type="number" id="bn_price">
+    <input type="number" id="strat_vix"><input type="number" id="nf_atr">
+    <input type="number" id="bn_atr"><input type="number" id="nifty_prev">
+    <input type="number" id="pcr_bn"><input type="number" id="nf_oi_call">
+    <input type="number" id="nf_oi_put"><input type="number" id="bn_oi_call">
+    <input type="number" id="bn_oi_put"><input type="number" id="nf_maxpain">
     <input type="number" id="bn_maxpain">
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════ -->
-<!-- PANEL 2: BACKTEST (Phase 4) -->
-<!-- ═══════════════════════════════════════════ -->
+<!-- PANEL 2: BACKTEST -->
 <div class="panel" id="p2">
-  <div class="cmd-placeholder">
-    📈 Backtest Engine<br>
-    <span style="font-size:12px;color:var(--text-dim)">Phase 4 — Coming soon</span>
-  </div>
+  <div class="cmd-placeholder">📈 Backtest Engine<br><span style="font-size:12px;color:var(--text-dim)">Phase 4 — Coming soon</span></div>
 </div>
 
-<!-- ═══════════════════════════════════════════ -->
-<!-- PANEL 3: CLOSE TAB -->
-<!-- ═══════════════════════════════════════════ -->
+<!-- PANEL 3: CLOSE -->
 <div class="panel" id="p3">
   <div class="section-title">Evening Close Data</div>
   <div id="evening-section" class="evening-grid">
-    <div class="input-group">
-      <label>Evening FII ₹Cr</label>
-      <input type="number" id="ev_fii" step="1" placeholder="Final FII from NSDL">
-    </div>
-    <div class="input-group">
-      <label>NF Close</label>
-      <input type="number" id="ev_nf_close" step="0.01" placeholder="Nifty 50 close">
-    </div>
-    <div class="input-group">
-      <label>BNF Close</label>
-      <input type="number" id="ev_bnf_close" step="0.01" placeholder="Bank Nifty close">
-    </div>
-    <div class="input-group">
-      <label>India VIX Close</label>
-      <input type="number" id="ev_indiavix" step="0.01" placeholder="VIX at close">
-    </div>
+    <div class="input-group"><label>Evening FII ₹Cr</label><input type="number" id="ev_fii" step="1" placeholder="Final FII from NSDL"></div>
+    <div class="input-group"><label>NF Close</label><input type="number" id="ev_nf_close" step="0.01" placeholder="Nifty 50 close"></div>
+    <div class="input-group"><label>BNF Close</label><input type="number" id="ev_bnf_close" step="0.01" placeholder="Bank Nifty close"></div>
+    <div class="input-group"><label>India VIX Close</label><input type="number" id="ev_indiavix" step="0.01" placeholder="VIX at close"></div>
   </div>
   <button class="btn btn-lock" id="btn-lock-evening">🔓 Lock Evening</button>
 
   <div class="section-title" style="margin-top:20px">Bhav Copy Upload</div>
   <div class="bhav-section">
-    <div class="input-group">
-      <label>Spot Price</label>
-      <input type="number" id="bhav-spot" step="0.01" placeholder="NF spot at close">
-    </div>
-    <div class="input-group">
-      <label>CSV File</label>
-      <input type="file" id="bhav-file" accept=".csv" multiple>
-    </div>
+    <div class="input-group"><label>Spot Price</label><input type="number" id="bhav-spot" step="0.01" placeholder="NF spot at close"></div>
+    <div class="input-group"><label>CSV File</label><input type="file" id="bhav-file" accept=".csv" multiple></div>
     <button class="btn btn-primary" id="btn-bhav-upload">📤 Upload Bhav Copy</button>
     <div id="bhav-status" class="bhav-status"></div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════ -->
-<!-- BOTTOM DRAWER — Payoff Chart -->
-<!-- ═══════════════════════════════════════════ -->
+<!-- BOTTOM DRAWER -->
 <div class="drawer-backdrop" id="drawer-backdrop"></div>
 <div class="drawer" id="payoff-drawer">
-  <div class="drawer-handle" id="drawer-handle">
-    <div class="drawer-handle-bar"></div>
-  </div>
+  <div class="drawer-handle" id="drawer-handle"><div class="drawer-handle-bar"></div></div>
   <div class="drawer-title" id="drawer-title">—</div>
-  <div class="drawer-chart">
-    <canvas id="payoff-canvas"></canvas>
-  </div>
+  <div class="drawer-chart"><canvas id="payoff-canvas"></canvas></div>
   <div class="drawer-metrics" id="drawer-metrics"></div>
 </div>
 
-<!-- ═══════════════════════════════════════════ -->
 <!-- TOKEN MODAL -->
-<!-- ═══════════════════════════════════════════ -->
 <div class="modal-overlay" id="token-modal">
   <div class="modal-box">
     <div class="modal-title">🔑 Upstox Access Token</div>
-    <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
-      Generate daily token from account.upstox.com → Developer → Apps → Market Radar
-    </p>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Generate daily token from account.upstox.com → Developer → Apps → Market Radar</p>
     <input type="text" class="modal-input" id="token-input" placeholder="Paste access token here">
     <button class="btn btn-primary" id="btn-save-token" style="width:100%">Save & Fetch</button>
   </div>
 </div>
 
-<!-- SCRIPTS (load order is critical) -->
+<!-- SCRIPTS -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="db.js"></script>
 <script src="bhav.js"></script>
@@ -258,36 +197,30 @@
 <script src="app.js"></script>
 <script src="upstox.js"></script>
 
-<!-- THEME TOGGLE SCRIPT -->
+<!-- THEME TOGGLE -->
 <script>
 (function() {
   const KEY = 'mr_theme';
   const html = document.documentElement;
   const saved = localStorage.getItem(KEY) || 'dark';
   html.setAttribute('data-theme', saved);
-
-  function updateToggleUI(theme) {
+  function updateUI(theme) {
     const icon = document.getElementById('theme-icon');
     const label = document.getElementById('theme-label');
     if (icon) icon.textContent = theme === 'dark' ? '🌙' : '☀️';
     if (label) label.textContent = theme === 'dark' ? 'Dark' : 'Light';
-    // Update meta theme color
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = theme === 'dark' ? '#d4a853' : '#b8862d';
   }
-
   document.addEventListener('DOMContentLoaded', () => {
-    updateToggleUI(saved);
+    updateUI(saved);
     const toggle = document.getElementById('theme-toggle');
-    if (toggle) {
-      toggle.addEventListener('click', () => {
-        const current = html.getAttribute('data-theme');
-        const next = current === 'dark' ? 'light' : 'dark';
-        html.setAttribute('data-theme', next);
-        localStorage.setItem(KEY, next);
-        updateToggleUI(next);
-      });
-    }
+    if (toggle) toggle.addEventListener('click', () => {
+      const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      localStorage.setItem(KEY, next);
+      updateUI(next);
+    });
   });
 })();
 </script>

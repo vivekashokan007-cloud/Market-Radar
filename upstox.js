@@ -4,7 +4,7 @@
    ============================================================ */
 
 const UPSTOX_API = 'https://api.upstox.com/v2';
-const UPSTOX_API_KEY = 'ec42e3bc-566b-4438-8edf-861db047dc16';
+const UPSTOX_API_KEY = '21504576-c556-46be-8b25-cee6cbfe79e6';
 
 window._CHAINS = { NF: {}, BNF: {} };
 window._LIVE_VIX = null;

@@ -227,6 +227,11 @@ html, body {
 .sc-greeks { font-size: 11px; color: var(--text-dim); padding: 6px 0; text-align: center; letter-spacing: 0.5px; }
 .sc-score { font-size: 11px; color: var(--amber-dim); text-align: right; margin-top: 2px; }
 .sc-tap { font-size: 10px; color: var(--text-dim); text-align: center; margin-top: 6px; opacity: 0.6; }
+.sc-targets {
+  font-size: 12px; padding: 6px 0; text-align: center;
+  border-bottom: 1px solid var(--border); color: var(--text);
+  letter-spacing: 0.3px;
+}
 
 /* ═══════════════════════════════════════════════════
    BOTTOM DRAWER
