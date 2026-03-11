@@ -1,7 +1,6 @@
 /* ============================================================
    upstox.js — Upstox API Integration for Market Radar v5.0
-   Full chain fetch for ALL expiries, real LTPs + greeks
-   Fixed: max pain algorithm, PCR calculation
+   Fetches available expiries from Upstox, then full chains
    ============================================================ */
 
 const UPSTOX_API = 'https://api.upstox.com/v2';
@@ -52,6 +51,28 @@ function _set(id, value) {
 }
 
 // ═══════════════════════════════════════════════════
+// FETCH AVAILABLE EXPIRIES FROM UPSTOX
+// ═══════════════════════════════════════════════════
+
+async function upstoxFetchExpiries(instrument) {
+  const resp = await fetch(`${UPSTOX_API}/option/contract?instrument_key=${encodeURIComponent(instrument)}`, { headers: _headers() });
+  const data = await resp.json();
+  if (data.status !== 'success' || !data.data) throw new Error(`Expiry fetch failed: ${instrument}`);
+
+  // data.data is an array of contract objects — extract unique expiry dates
+  const expiries = new Set();
+  for (const contract of data.data) {
+    if (contract.expiry) expiries.add(contract.expiry);
+    if (contract.expiry_date) expiries.add(contract.expiry_date);
+  }
+
+  // Sort ascending and return
+  const sorted = [...expiries].sort();
+  console.log(`[upstox] Expiries for ${instrument}: ${sorted.slice(0, 5).join(', ')} (${sorted.length} total)`);
+  return sorted;
+}
+
+// ═══════════════════════════════════════════════════
 // MASTER FETCH
 // ═══════════════════════════════════════════════════
 
@@ -62,13 +83,33 @@ async function upstoxAutoFill() {
   const statusEl = document.getElementById('upstox-status');
   if (statusEl) statusEl.textContent = 'Fetching...';
 
-  const nfExps  = getExpiries('NF').slice(0, 2);
-  const bnfExps = getExpiries('BNF').slice(0, 2);
   window._CHAINS = { NF: {}, BNF: {} };
+  if (!window._RAW_CHAIN_SAMPLE) window._RAW_CHAIN_SAMPLE = {};
 
   try {
+    // Step 1: Fetch spots first (needed for chain filtering)
+    await upstoxFetchSpots();
+
+    // Step 2: Fetch available expiries from Upstox
+    let nfExps = [], bnfExps = [];
+    try {
+      const nfAll = await upstoxFetchExpiries('NSE_INDEX|Nifty 50');
+      nfExps = nfAll.slice(0, 2); // nearest 2
+    } catch(e) {
+      console.warn('[upstox] NF expiry fetch failed:', e.message);
+    }
+    try {
+      const bnfAll = await upstoxFetchExpiries('NSE_INDEX|Nifty Bank');
+      bnfExps = bnfAll.slice(0, 2); // nearest 2
+    } catch(e) {
+      console.warn('[upstox] BNF expiry fetch failed:', e.message);
+    }
+
+    console.log(`[upstox] Using NF expiries: ${nfExps.join(', ')}`);
+    console.log(`[upstox] Using BNF expiries: ${bnfExps.join(', ')}`);
+
+    // Step 3: Build remaining fetches
     const fetches = [
-      upstoxFetchSpots(),
       upstoxFetchHistorical('NSE_INDEX|Nifty 50', true),
       upstoxFetchHistorical('NSE_INDEX|Nifty Bank', false),
       upstoxFetchPositions(),
@@ -78,16 +119,16 @@ async function upstoxAutoFill() {
     for (const exp of bnfExps) fetches.push(upstoxFetchFullChain('NSE_INDEX|Nifty Bank', exp, 'BNF'));
 
     const results = await Promise.allSettled(fetches);
-    const total = results.length;
-    const ok = results.filter(r => r.status === 'fulfilled').length;
+    // Total = spots(1) + expiry_fetches(2) + historical(2) + positions(1) + margins(1) + chains(up to 4)
+    const chainCount = nfExps.length + bnfExps.length;
+    const total = 1 + 2 + results.length; // spots + expiry lookups + rest
+    const ok = results.filter(r => r.status === 'fulfilled').length + 3; // +3 for spots + 2 expiry fetches that already completed
     const fails = results.filter(r => r.status === 'rejected');
 
     localStorage.setItem('upstox_last_fetch', new Date().toISOString());
     if (statusEl) statusEl.textContent = `✅ ${ok}/${total} fetched`;
 
-    // Log any failures for debugging
-    fails.forEach((f, i) => console.warn(`[upstox] Fetch #${i} failed:`, f.reason));
-
+    fails.forEach(f => console.warn('[upstox] Fetch failed:', f.reason));
     console.log(`[upstox] Chains: NF=${Object.keys(window._CHAINS.NF).length}, BNF=${Object.keys(window._CHAINS.BNF).length}`);
 
     calcScore();
@@ -117,7 +158,7 @@ async function upstoxFetchSpots() {
 }
 
 // ═══════════════════════════════════════════════════
-// FULL CHAIN FETCH — real LTPs + greeks + CORRECT MAX PAIN
+// FULL CHAIN FETCH
 // ═══════════════════════════════════════════════════
 
 async function upstoxFetchFullChain(instrument, expiry, indexKey) {
@@ -125,68 +166,79 @@ async function upstoxFetchFullChain(instrument, expiry, indexKey) {
 
   const resp = await fetch(`${UPSTOX_API}/option/chain?instrument_key=${encodeURIComponent(instrument)}&expiry_date=${expiry}`, { headers: _headers() });
   const data = await resp.json();
-  if (data.status !== 'success' || !data.data) throw new Error(`Chain failed: ${indexKey} ${expiry}`);
 
-  // Store raw sample for debug inspection
-  if (!window._RAW_CHAIN_SAMPLE) window._RAW_CHAIN_SAMPLE = {};
+  // Store raw sample for debug
   const rawItems = Array.isArray(data.data) ? data.data : [];
   window._RAW_CHAIN_SAMPLE[`${indexKey}_${expiry}`] = {
+    status: data.status,
     isArray: Array.isArray(data.data),
     type: typeof data.data,
     length: rawItems.length,
-    topKeys: Array.isArray(data.data) ? null : Object.keys(data.data).slice(0, 10),
-    firstItem: rawItems.length > 0 ? JSON.parse(JSON.stringify(rawItems[0])) : data.data,
+    topKeys: Array.isArray(data.data) ? null : (data.data ? Object.keys(data.data).slice(0, 10) : []),
+    firstItem: rawItems.length > 0 ? JSON.parse(JSON.stringify(rawItems[0])) : (data.data || null),
     sampleKeys: rawItems.length > 0 ? Object.keys(rawItems[0]) : []
   };
+
+  if (data.status !== 'success' || !data.data) throw new Error(`Chain failed: ${indexKey} ${expiry}`);
 
   const isNF = indexKey === 'NF';
   const spot = gv(isNF ? 'nf_price' : 'bn_price') || 0;
   const today = new Date(); today.setHours(0,0,0,0);
   const expDate = new Date(expiry); expDate.setHours(0,0,0,0);
   const dte = Math.max(1, Math.round((expDate - today) / 86400000));
-  // Trading days (excludes weekends + NSE holidays) — for VIX-based expected move
   const tdte = typeof tradingDaysTo === 'function' ? tradingDaysTo(expiry) : dte;
 
   const strikes = {};
   let putOI = 0, callOI = 0;
   let maxCallOI = 0, maxCallStrike = 0, maxPutOI = 0, maxPutStrike = 0;
   let atmIV = null;
+  const callOIMap = {};
+  const putOIMap = {};
 
-  // Collect all OI data for max pain calculation
-  const callOIMap = {}; // strike → OI
-  const putOIMap  = {}; // strike → OI
-
-  for (const item of data.data) {
-    const strike = item.strike_price;
+  for (const item of rawItems) {
+    // Try multiple possible field names for strike price
+    const strike = item.strike_price || item.strikePrice || item.strike;
     if (!strike) continue;
     if (spot > 0 && Math.abs(strike - spot) > (isNF ? 1500 : 4000)) continue;
 
     const sd = {};
 
-    if (item.call_options) {
-      const md = item.call_options.market_data || {};
-      const gr = item.call_options.greeks || {};
+    // Call options — try multiple field name patterns
+    const callData = item.call_options || item.callOptions || item.CE || item.ce;
+    if (callData) {
+      const md = callData.market_data || callData.marketData || callData;
+      const gr = callData.greeks || callData.option_greeks || callData;
       sd.CE = {
-        ltp: md.ltp || 0, bid: md.bid_price || md.ltp || 0, ask: md.ask_price || md.ltp || 0,
-        oi: md.oi || 0, vol: md.volume || 0,
-        delta: gr.delta, theta: gr.theta, gamma: gr.gamma, vega: gr.vega, iv: gr.iv
+        ltp:   md.ltp || md.last_price || md.lastPrice || 0,
+        bid:   md.bid_price || md.bidPrice || md.best_bid_price || md.ltp || 0,
+        ask:   md.ask_price || md.askPrice || md.best_ask_price || md.ltp || 0,
+        oi:    md.oi || md.open_interest || md.openInterest || 0,
+        vol:   md.volume || md.traded_volume || 0,
+        delta: gr.delta, theta: gr.theta, gamma: gr.gamma, vega: gr.vega,
+        iv:    gr.iv || gr.implied_volatility || gr.impliedVolatility || null
       };
-      const thisOI = md.oi || 0;
+      const thisOI = sd.CE.oi;
       callOI += thisOI;
       callOIMap[strike] = thisOI;
       if (thisOI > maxCallOI) { maxCallOI = thisOI; maxCallStrike = strike; }
-      if (spot > 0 && Math.abs(strike - spot) < (isNF ? 50 : 100) && gr.iv) atmIV = gr.iv;
+      if (spot > 0 && Math.abs(strike - spot) < (isNF ? 50 : 100) && sd.CE.iv) atmIV = sd.CE.iv;
     }
 
-    if (item.put_options) {
-      const md = item.put_options.market_data || {};
-      const gr = item.put_options.greeks || {};
+    // Put options
+    const putData = item.put_options || item.putOptions || item.PE || item.pe;
+    if (putData) {
+      const md = putData.market_data || putData.marketData || putData;
+      const gr = putData.greeks || putData.option_greeks || putData;
       sd.PE = {
-        ltp: md.ltp || 0, bid: md.bid_price || md.ltp || 0, ask: md.ask_price || md.ltp || 0,
-        oi: md.oi || 0, vol: md.volume || 0,
-        delta: gr.delta, theta: gr.theta, gamma: gr.gamma, vega: gr.vega, iv: gr.iv
+        ltp:   md.ltp || md.last_price || md.lastPrice || 0,
+        bid:   md.bid_price || md.bidPrice || md.best_bid_price || md.ltp || 0,
+        ask:   md.ask_price || md.askPrice || md.best_ask_price || md.ltp || 0,
+        oi:    md.oi || md.open_interest || md.openInterest || 0,
+        vol:   md.volume || md.traded_volume || 0,
+        delta: gr.delta, theta: gr.theta, gamma: gr.gamma, vega: gr.vega,
+        iv:    gr.iv || gr.implied_volatility || gr.impliedVolatility || null
       };
-      const thisOI = md.oi || 0;
+      const thisOI = sd.PE.oi;
       putOI += thisOI;
       putOIMap[strike] = thisOI;
       if (thisOI > maxPutOI) { maxPutOI = thisOI; maxPutStrike = strike; }
@@ -195,48 +247,29 @@ async function upstoxFetchFullChain(instrument, expiry, indexKey) {
     if (sd.CE || sd.PE) strikes[strike] = sd;
   }
 
-  // ── PCR ──
+  // PCR
   const pcr = callOI > 0 ? +(putOI / callOI).toFixed(2) : 0;
 
-  // ── MAX PAIN — correct algorithm ──
-  // For each candidate settlement price, sum total loss to ALL option buyers
-  // Max pain = strike where buyers lose the most (minimum payout to buyers)
+  // Max Pain — correct algorithm
   const allStrikes = Object.keys(strikes).map(Number).sort((a, b) => a - b);
   let mpStrike = 0;
-
   if (allStrikes.length > 0) {
     let minTotalPain = Infinity;
-
     for (const candidate of allStrikes) {
       let totalPain = 0;
-
-      // For each call: if candidate > call_strike, call holder gains (candidate - strike) × OI
-      // We want to find where total gains to buyers are MINIMIZED
       for (const ks in callOIMap) {
-        const k = Number(ks);
-        const oi = callOIMap[k];
-        if (oi > 0 && candidate > k) {
-          totalPain += (candidate - k) * oi;
-        }
+        const k = Number(ks), oi = callOIMap[k];
+        if (oi > 0 && candidate > k) totalPain += (candidate - k) * oi;
       }
-
-      // For each put: if candidate < put_strike, put holder gains (strike - candidate) × OI
       for (const ks in putOIMap) {
-        const k = Number(ks);
-        const oi = putOIMap[k];
-        if (oi > 0 && candidate < k) {
-          totalPain += (k - candidate) * oi;
-        }
+        const k = Number(ks), oi = putOIMap[k];
+        if (oi > 0 && candidate < k) totalPain += (k - candidate) * oi;
       }
-
-      if (totalPain < minTotalPain) {
-        minTotalPain = totalPain;
-        mpStrike = candidate;
-      }
+      if (totalPain < minTotalPain) { minTotalPain = totalPain; mpStrike = candidate; }
     }
   }
 
-  // ── Store chain ──
+  // Store chain
   window._CHAINS[indexKey][expiry] = {
     strikes, spot, dte, tradingDte: tdte, pcr, callOI, putOI,
     callWall: maxCallStrike, putWall: maxPutStrike,
@@ -254,7 +287,7 @@ async function upstoxFetchFullChain(instrument, expiry, indexKey) {
     else window._BNF_ATM_IV = atmIV;
   }
 
-  console.log(`[upstox] Chain: ${indexKey} ${expiry} — ${allStrikes.length} strikes, PCR=${pcr}, MaxPain=${mpStrike}, CallOI=${callOI}, PutOI=${putOI}, DTE=${dte}`);
+  console.log(`[upstox] Chain: ${indexKey} ${expiry} — ${allStrikes.length} strikes, PCR=${pcr}, MaxPain=${mpStrike}, CallOI=${callOI}, PutOI=${putOI}, DTE=${dte}/${tdte}T`);
 }
 
 // ═══════════════════════════════════════════════════
@@ -273,7 +306,6 @@ async function upstoxFetchHistorical(instrument, isNF) {
   if (candles.length < 2) return;
   candles.sort((a, b) => new Date(a[0]) - new Date(b[0]));
 
-  // ATR14 — Wilder's smoothing
   const trs = [];
   for (let i = 1; i < candles.length; i++) {
     const h = candles[i][2], l = candles[i][3], pc = candles[i - 1][4];
@@ -285,7 +317,6 @@ async function upstoxFetchHistorical(instrument, isNF) {
 
   _set(isNF ? 'nf_atr' : 'bn_atr', +atr.toFixed(2));
 
-  // Close character
   const latest = candles[candles.length - 1];
   const prevClose = candles[candles.length - 2][4];
   if (isNF) {
@@ -298,7 +329,7 @@ async function upstoxFetchHistorical(instrument, isNF) {
 }
 
 // ═══════════════════════════════════════════════════
-// POSITIONS
+// POSITIONS + MARGINS
 // ═══════════════════════════════════════════════════
 
 async function upstoxFetchPositions() {
@@ -315,41 +346,19 @@ async function upstoxFetchPositions() {
   }).join('');
 }
 
-// ═══════════════════════════════════════════════════
-// MARGINS — handle multiple response structures
-// ═══════════════════════════════════════════════════
-
 async function upstoxFetchMargins() {
   const resp = await fetch(`${UPSTOX_API}/user/get-funds-and-margin`, { headers: _headers() });
   const data = await resp.json();
   if (data.status !== 'success') throw new Error('Margins failed');
-
   const m = data.data;
   const el = document.getElementById('upstox-margin');
   if (!el || !m) return;
-
-  // Upstox may return margin under different keys depending on segment
   let avail = 0, used = 0;
-
-  if (m.equity) {
-    avail = m.equity.available_margin || m.equity.net || 0;
-    used  = m.equity.used_margin || m.equity.blocked_margin || 0;
-  } else if (m.commodity) {
-    avail = m.commodity.available_margin || 0;
-    used  = m.commodity.used_margin || 0;
-  }
-
-  // Also check top-level keys (some API versions)
+  if (m.equity) { avail = m.equity.available_margin || m.equity.net || 0; used = m.equity.used_margin || m.equity.blocked_margin || 0; }
   if (avail === 0 && m.available_margin) avail = m.available_margin;
   if (used === 0 && m.used_margin) used = m.used_margin;
-
-  // Log full margin response for debugging
   console.log('[upstox] Margin response:', JSON.stringify(m));
-
-  el.innerHTML = `<div class="margin-info">
-    <span>Available: ₹${avail.toLocaleString('en-IN')}</span>
-    <span> | Used: ₹${used.toLocaleString('en-IN')}</span>
-  </div>`;
+  el.innerHTML = `<div class="margin-info"><span>Available: ₹${avail.toLocaleString('en-IN')}</span><span> | Used: ₹${used.toLocaleString('en-IN')}</span></div>`;
 }
 
 // ═══════════════════════════════════════════════════
@@ -362,5 +371,5 @@ document.addEventListener('DOMContentLoaded', () => {
   const fetchBtn = document.getElementById('btn-fetch-upstox');
   if (fetchBtn) fetchBtn.addEventListener('click', upstoxAutoFill);
   if (upstoxGetToken()) setTimeout(upstoxAutoFill, 500);
-  console.log('[upstox.js] v5.0 — full chain mode');
+  console.log('[upstox.js] v5.0 — expiry discovery + full chain mode');
 });
