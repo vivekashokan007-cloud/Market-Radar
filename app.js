@@ -1,6 +1,7 @@
 /* ============================================================
-   app.js — Market Radar v5.0 — Phase 1 Complete
+   app.js — Market Radar v5.0 — Phase 2 Active
    EV-based scoring, target/SL, moneyness labels
+   Split display: Top 5 NF + Top 5 BNF
    All 7 strategies × all expiries × both indices
    ============================================================ */
 
@@ -411,10 +412,13 @@ async function buildCommand() {
   // Show loading while checking margins
   panel.innerHTML = '<div class="cmd-placeholder">Checking margins for top strategies...</div>';
 
-  // Check margin for top 10 strategies via Upstox API
+  // Split by index: top 10 NF + top 10 BNF for margin checks
   const availMargin = window._AVAILABLE_MARGIN || CAPITAL;
-  const top10 = ranked.slice(0, 10);
-  for (const setup of top10) {
+  const nfRanked = ranked.filter(s => s.indexKey === 'NF').slice(0, 10);
+  const bnfRanked = ranked.filter(s => s.indexKey === 'BNF').slice(0, 10);
+  const toCheck = [...nfRanked, ...bnfRanked];
+
+  for (const setup of toCheck) {
     const marginResult = typeof upstoxCheckMargin === 'function' ? await upstoxCheckMargin(setup.legs) : null;
     if (marginResult && marginResult.ok && marginResult.required > 0) {
       setup.requiredMargin = marginResult.required;
@@ -427,25 +431,49 @@ async function buildCommand() {
     }
   }
 
-  // Filter: only executable strategies
-  const affordable = top10.filter(s => s.marginOk);
-
-  let html = '';
-  const isGo = affordable.length > 0;
-  html += `<div class="gonogo ${isGo?'go':'nogo'}"><div class="gonogo-label">${isGo?'✅ GO':'🚫 NO-GO'}</div><div class="gonogo-strategy">${isGo?`${affordable.length} executable (of ${ranked.length} viable)`:'No setups fit margin ₹'+availMargin.toLocaleString('en-IN')}</div><div class="gonogo-meta">VIX: ${vix||'—'} | Bias: ${q1.biasConf} ${q1.bias}</div></div>`;
-  html += renderQ1Card(q1);
-  if (affordable.length > 0) {
-    html += '<div class="section-title">TOP STRATEGIES — Real-Time</div>';
+  // Pick top 5 per index (max 3 same strategy type)
+  function pickTop5(arr) {
     const shown = [], typeCounts = {};
-    for (const s of affordable) {
+    for (const s of arr) {
       if (shown.length >= 5) break;
       typeCounts[s.stratType] = (typeCounts[s.stratType] || 0) + 1;
       if (typeCounts[s.stratType] > 3) continue;
       shown.push(s);
     }
-    shown.forEach((s, i) => { html += renderStrategyCard(s, i); });
-    _RANKED_SETUPS = shown;
+    return shown;
   }
+
+  const nfAffordable = pickTop5(nfRanked.filter(s => s.marginOk));
+  const bnfAffordable = pickTop5(bnfRanked.filter(s => s.marginOk));
+  const totalAffordable = nfAffordable.length + bnfAffordable.length;
+
+  let html = '';
+  const isGo = totalAffordable > 0;
+  html += `<div class="gonogo ${isGo?'go':'nogo'}"><div class="gonogo-label">${isGo?'✅ GO':'🚫 NO-GO'}</div><div class="gonogo-strategy">${isGo?`${totalAffordable} executable (of ${ranked.length} viable)`:'No setups fit margin ₹'+availMargin.toLocaleString('en-IN')}</div><div class="gonogo-meta">VIX: ${vix||'—'} | Bias: ${q1.biasConf} ${q1.bias}</div></div>`;
+  html += renderQ1Card(q1);
+
+  // Collect all shown setups in order for drawer click binding
+  const allShown = [];
+
+  // ── NIFTY 50 section ──
+  if (nfAffordable.length > 0) {
+    html += '<div class="section-title">NIFTY 50 — Top 5</div>';
+    nfAffordable.forEach((s, i) => { html += renderStrategyCard(s, i); allShown.push(s); });
+  } else if (Object.keys(window._CHAINS.NF).length > 0) {
+    html += '<div class="section-title">NIFTY 50 — Top 5</div>';
+    html += '<div class="cmd-placeholder">No NF setups pass margin / R:R filters</div>';
+  }
+
+  // ── BANK NIFTY section ──
+  if (bnfAffordable.length > 0) {
+    html += '<div class="section-title">BANK NIFTY — Top 5</div>';
+    bnfAffordable.forEach((s, i) => { html += renderStrategyCard(s, i); allShown.push(s); });
+  } else if (Object.keys(window._CHAINS.BNF).length > 0) {
+    html += '<div class="section-title">BANK NIFTY — Top 5</div>';
+    html += '<div class="cmd-placeholder">No BNF setups pass margin / R:R filters</div>';
+  }
+
+  _RANKED_SETUPS = allShown;
   panel.innerHTML = html;
   document.querySelectorAll('.strat-card').forEach((card, i) => { card.addEventListener('click', () => openDrawer(_RANKED_SETUPS[i])); });
 }
