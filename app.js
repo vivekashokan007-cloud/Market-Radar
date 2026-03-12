@@ -616,6 +616,291 @@ function showDebug() {
 }
 
 // ═══════════════════════════════════════════════════
+// PHASE 2: POSITION DETECTION + SUPABASE LOGGING
+// ═══════════════════════════════════════════════════
+
+function parseUpstoxSymbol(sym) {
+  // Parse tradingsymbol like "NIFTY2630656300CE" or "BANKNIFTY2630355200PE"
+  if (!sym) return null;
+  const s = sym.toUpperCase();
+  let indexKey, rest;
+  if (s.startsWith('BANKNIFTY')) { indexKey = 'BNF'; rest = s.slice(9); }
+  else if (s.startsWith('NIFTY')) { indexKey = 'NF'; rest = s.slice(5); }
+  else return null;
+  // rest = "2630656300CE" → year(2)+month(1-2)+day(2)+strike+type
+  const type = rest.slice(-2); // CE or PE
+  if (type !== 'CE' && type !== 'PE') return null;
+  const numPart = rest.slice(0, -2);
+  // Extract expiry: first 5-7 chars are YYMDD or YYMMDD
+  // Extract strike: remaining digits
+  // Upstox format: YYMDD (e.g., 26306 = 2026-03-06)
+  let expStr, strikeStr;
+  if (numPart.length >= 7) {
+    expStr = numPart.slice(0, 5); strikeStr = numPart.slice(5);
+  } else {
+    return null;
+  }
+  const strike = parseFloat(strikeStr);
+  if (isNaN(strike)) return null;
+  // Parse expiry: YY M DD or YY MM DD
+  const yy = parseInt(expStr.slice(0, 2));
+  const remaining = expStr.slice(2);
+  let mm, dd;
+  if (remaining.length === 3) { mm = parseInt(remaining.slice(0, 1)); dd = parseInt(remaining.slice(1)); }
+  else if (remaining.length === 4) { mm = parseInt(remaining.slice(0, 2)); dd = parseInt(remaining.slice(2)); }
+  else return null;
+  const expiry = `20${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+  return { indexKey, expiry, strike, type };
+}
+
+function detectStrategy(legs) {
+  if (!legs || legs.length === 0) return null;
+  const ceLegs = legs.filter(l => l.type === 'CE');
+  const peLegs = legs.filter(l => l.type === 'PE');
+  const ceBuy = ceLegs.filter(l => l.action === 'BUY');
+  const ceSell = ceLegs.filter(l => l.action === 'SELL');
+  const peBuy = peLegs.filter(l => l.action === 'BUY');
+  const peSell = peLegs.filter(l => l.action === 'SELL');
+
+  // Iron Condor: 1 CE SELL + 1 CE BUY + 1 PE SELL + 1 PE BUY
+  if (ceSell.length === 1 && ceBuy.length === 1 && peSell.length === 1 && peBuy.length === 1)
+    return 'IRON_CONDOR';
+  // Bull Put Spread: 1 PE SELL (higher) + 1 PE BUY (lower)
+  if (peSell.length === 1 && peBuy.length === 1 && ceLegs.length === 0 && peSell[0].strike > peBuy[0].strike)
+    return 'BULL_PUT';
+  // Bear Call Spread: 1 CE SELL (lower) + 1 CE BUY (higher)
+  if (ceSell.length === 1 && ceBuy.length === 1 && peLegs.length === 0 && ceSell[0].strike < ceBuy[0].strike)
+    return 'BEAR_CALL';
+  // Bull Call Spread: 1 CE BUY (lower) + 1 CE SELL (higher)
+  if (ceBuy.length === 1 && ceSell.length === 1 && peLegs.length === 0 && ceBuy[0].strike < ceSell[0].strike)
+    return 'BULL_CALL';
+  // Bear Put Spread: 1 PE BUY (higher) + 1 PE SELL (lower)
+  if (peBuy.length === 1 && peSell.length === 1 && ceLegs.length === 0 && peBuy[0].strike > peSell[0].strike)
+    return 'BEAR_PUT';
+  // Long Straddle: 1 CE BUY + 1 PE BUY, same strike
+  if (ceBuy.length === 1 && peBuy.length === 1 && ceSell.length === 0 && peSell.length === 0 && ceBuy[0].strike === peBuy[0].strike)
+    return 'LONG_STRADDLE';
+  // Long Strangle: 1 CE BUY + 1 PE BUY, different strikes
+  if (ceBuy.length === 1 && peBuy.length === 1 && ceSell.length === 0 && peSell.length === 0)
+    return 'LONG_STRANGLE';
+
+  return 'UNKNOWN';
+}
+
+async function detectAndLogPositions(rawPositions) {
+  if (!rawPositions || !rawPositions.length) {
+    // No positions — check if any OPEN trades in Supabase should be auto-closed
+    await autoCloseGonePositions([]);
+    renderPositionsTab();
+    return;
+  }
+
+  // Parse and group legs by index + expiry
+  const groups = {};
+  for (const pos of rawPositions) {
+    const qty = pos.quantity || pos.net_quantity || 0;
+    if (qty === 0) continue; // Closed position
+    const sym = pos.tradingsymbol || pos.trading_symbol || '';
+    const parsed = parseUpstoxSymbol(sym);
+    if (!parsed) continue;
+    const key = `${parsed.indexKey}_${parsed.expiry}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push({
+      strike: parsed.strike,
+      type: parsed.type,
+      action: qty > 0 ? 'BUY' : 'SELL',
+      qty: Math.abs(qty),
+      entry_ltp: pos.average_price || pos.buy_price || pos.sell_price || 0,
+      pnl: pos.pnl || 0,
+      symbol: sym
+    });
+  }
+
+  // Detect strategies and log to Supabase
+  const detected = [];
+  for (const key in groups) {
+    const legs = groups[key];
+    const [indexKey, expiry] = key.split('_');
+    const stratType = detectStrategy(legs);
+    if (!stratType || stratType === 'UNKNOWN') continue;
+
+    // Sort legs: SELL first, then BUY; PE first within same action
+    legs.sort((a, b) => {
+      if (a.action !== b.action) return a.action === 'SELL' ? -1 : 1;
+      return a.strike - b.strike;
+    });
+
+    // Check if already in Supabase
+    const existing = await dbFindOpenTrade(indexKey, expiry, legs[0].strike, legs[0].type, legs[0].action);
+
+    if (!existing) {
+      // New trade — insert to Supabase
+      const trade = {
+        strategy_type: stratType,
+        index_key: indexKey,
+        expiry: expiry,
+        entry_spot: gv(indexKey === 'NF' ? 'nf_price' : 'bn_price'),
+        entry_vix: gv('india_vix'),
+        lots: legs[0].qty / (indexKey === 'NF' ? NF_LOT_SIZE : BNF_LOT),
+      };
+      // Calculate net premium from entry LTPs
+      let netPrem = 0;
+      for (let i = 0; i < Math.min(legs.length, 4); i++) {
+        trade[`leg${i+1}`] = legs[i];
+        const mult = legs[i].action === 'SELL' ? 1 : -1;
+        netPrem += mult * legs[i].entry_ltp;
+      }
+      trade.entry_premium = +netPrem.toFixed(2);
+      const isCredit = ['BULL_PUT','BEAR_CALL','IRON_CONDOR'].includes(stratType);
+      const lotSize = indexKey === 'NF' ? NF_LOT_SIZE : BNF_LOT;
+      const width = indexKey === 'NF' ? NF_IC_WIDTH : BNF_IC_WIDTH;
+      const safeLots = Math.max(1, trade.lots || 1);
+      if (isCredit) {
+        trade.max_profit = +(netPrem * lotSize * safeLots).toFixed(0);
+        trade.max_loss = +((width - netPrem) * lotSize * safeLots).toFixed(0);
+      } else {
+        trade.max_profit = +((width - Math.abs(netPrem)) * lotSize * safeLots).toFixed(0);
+        trade.max_loss = +(Math.abs(netPrem) * lotSize * safeLots).toFixed(0);
+      }
+      trade.target_profit = +(trade.max_profit * 0.5).toFixed(0);
+      trade.stop_loss = +(trade.max_loss * 0.5).toFixed(0);
+
+      const result = await dbInsertTrade(trade);
+      console.log(`[positions] Logged new ${stratType}: ${indexKey} ${expiry}`, result);
+      detected.push({ ...trade, id: result.id, legs, status: 'OPEN', recommendation: 'HOLD', current_pnl: 0 });
+    } else {
+      // Existing trade — update with live P&L
+      const livePnl = legs.reduce((sum, l) => sum + l.pnl, 0);
+      const liveSpot = gv(indexKey === 'NF' ? 'nf_price' : 'bn_price');
+      const rec = computeRecommendation(existing, livePnl, liveSpot, expiry);
+      await dbUpdateTrade(existing.id, {
+        current_pnl: +livePnl.toFixed(0),
+        current_spot: liveSpot,
+        recommendation: rec
+      });
+      detected.push({ ...existing, legs, current_pnl: +livePnl.toFixed(0), recommendation: rec });
+    }
+  }
+
+  // Check for auto-close
+  await autoCloseGonePositions(Object.keys(groups));
+
+  // Store and render
+  window._DETECTED_POSITIONS = detected;
+  renderPositionsTab();
+}
+
+async function autoCloseGonePositions(activeKeys) {
+  const openTrades = await dbGetOpenTrades();
+  for (const trade of openTrades) {
+    const key = `${trade.index_key}_${trade.expiry}`;
+    if (!activeKeys.includes(key)) {
+      // This trade is no longer in Upstox positions — auto-close
+      await dbCloseTrade(trade.id, {
+        status: 'CLOSED',
+        exit_reason: 'AUTO_DETECT',
+        actual_pnl: trade.current_pnl || 0
+      });
+      console.log(`[positions] Auto-closed trade #${trade.id}: ${trade.strategy_type} ${trade.index_key} ${trade.expiry}`);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// HOLD / EXIT / TRAIL ENGINE
+// ═══════════════════════════════════════════════════
+
+function computeRecommendation(trade, currentPnl, currentSpot, expiry) {
+  const target = trade.target_profit || 0;
+  const sl = trade.stop_loss || 0;
+  const dte = daysTo(expiry);
+  const isCredit = ['BULL_PUT','BEAR_CALL','IRON_CONDOR'].includes(trade.strategy_type);
+
+  // Target hit
+  if (target > 0 && currentPnl >= target) return 'EXIT';
+  // Stop loss hit
+  if (sl > 0 && currentPnl <= -sl) return 'EXIT';
+
+  if (isCredit) {
+    // DTE ≤ 3 and profitable → EXIT (gamma risk)
+    if (dte <= 3 && currentPnl > 0) return 'EXIT';
+    // DTE ≤ 3 and losing → EXIT (cut before expiry)
+    if (dte <= 3 && currentPnl < 0) return 'EXIT';
+    // Spot within danger zone of sell strike
+    if (currentSpot && trade.leg1_strike) {
+      const vix = gv('india_vix') || 14;
+      const tdte = tradingDaysTo(expiry);
+      const em = bsExpectedMove(currentSpot, vix, tdte);
+      const sellStrike = trade.leg1_strike; // First leg is SELL for credit spreads
+      if (Math.abs(currentSpot - sellStrike) < em.one_sigma * 0.5) return 'EXIT';
+    }
+    // DTE 4-10 and profit > 30% of max → TRAIL
+    if (dte >= 4 && dte <= 10 && trade.max_profit && currentPnl > trade.max_profit * 0.3) return 'TRAIL';
+  } else {
+    // Debit strategies
+    if (dte <= 5 && currentPnl <= 0) return 'EXIT'; // No move, theta killing
+    if (currentPnl > 0 && trade.max_loss && currentPnl > trade.max_loss * 0.2) return 'TRAIL';
+  }
+
+  return 'HOLD';
+}
+
+// ═══════════════════════════════════════════════════
+// POSITIONS TAB RENDER
+// ═══════════════════════════════════════════════════
+
+async function renderPositionsTab() {
+  const openEl = document.getElementById('positions-open');
+  const histEl = document.getElementById('positions-history');
+  if (!openEl) return;
+
+  // Render open positions
+  const detected = window._DETECTED_POSITIONS || [];
+  if (detected.length === 0) {
+    openEl.innerHTML = '<div class="cmd-placeholder">No open positions detected</div>';
+  } else {
+    openEl.innerHTML = detected.map(pos => {
+      const recClass = pos.recommendation === 'EXIT' ? 'rec-exit' : pos.recommendation === 'TRAIL' ? 'rec-trail' : 'rec-hold';
+      const pnlClass = (pos.current_pnl || 0) >= 0 ? 'profit' : 'loss';
+      const legStr = (pos.legs || []).map(l => `${l.action} ${l.strike} ${l.type}`).join(' | ');
+      return `<div class="pos-card">
+        <div class="pos-card-header">
+          <span class="pos-strat-name">${STRAT_LABELS[pos.strategy_type] || pos.strategy_type}</span>
+          <span class="pos-rec ${recClass}">${pos.recommendation}</span>
+        </div>
+        <div class="pos-card-index">${pos.index_key} · ${pos.expiry} · DTE ${daysTo(pos.expiry)}</div>
+        <div class="pos-card-legs">${legStr}</div>
+        <div class="pos-card-pnl">
+          <span>Current P&L: <span class="${pnlClass}">₹${(pos.current_pnl||0).toLocaleString('en-IN')}</span></span>
+          <span>Target: ₹${(pos.target_profit||0).toLocaleString('en-IN')} | SL: ₹${(pos.stop_loss||0).toLocaleString('en-IN')}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Render recent trade history from Supabase
+  if (!histEl) return;
+  try {
+    const allTrades = await dbGetAllTrades(10);
+    if (!allTrades.length) { histEl.innerHTML = '<div class="cmd-placeholder">No trade history yet</div>'; return; }
+    histEl.innerHTML = allTrades.map(t => {
+      const statusClass = t.status === 'OPEN' ? 'status-open' : t.status === 'CLOSED' ? 'status-closed' : 'status-expired';
+      const pnl = t.actual_pnl || t.current_pnl || 0;
+      const pnlClass = pnl >= 0 ? 'profit' : 'loss';
+      return `<div class="hist-row">
+        <span class="hist-strat">${t.strategy_type}</span>
+        <span class="hist-index">${t.index_key}</span>
+        <span class="hist-expiry">${t.expiry}</span>
+        <span class="${statusClass}">${t.status}</span>
+        <span class="${pnlClass}">₹${pnl.toLocaleString('en-IN')}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    histEl.innerHTML = '<div class="cmd-placeholder">Could not load trade history</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
 
@@ -625,7 +910,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const lb=document.getElementById('btn-lock-breadth'); if(lb) lb.addEventListener('click',toggleBreadth);
   const le=document.getElementById('btn-lock-evening'); if(le) le.addEventListener('click',toggleEvening);
   const bh=document.getElementById('btn-bhav-upload'); if(bh) bh.addEventListener('click',handleBhavUpload);
-  const db=document.getElementById('btn-debug'); if(db) db.addEventListener('click',showDebug);
+  const dbg=document.getElementById('btn-debug'); if(dbg) dbg.addEventListener('click',showDebug);
   initInputListeners(); initDrawer(); restoreSavedState(); renderEveningSection(); calcScore(); go(0);
-  console.log('[app.js] Market Radar v5.0 — Phase 1 Complete');
+  // Load any existing positions from Supabase on startup
+  renderPositionsTab();
+  console.log('[app.js] Market Radar v5.0 — Phase 2 Active');
 });

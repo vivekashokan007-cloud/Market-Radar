@@ -337,13 +337,21 @@ async function upstoxFetchPositions() {
   const data = await resp.json();
   if (data.status !== 'success') throw new Error('Positions failed');
   const positions = data.data || [];
+
+  // Store globally for strategy detection
+  window._UPSTOX_POSITIONS = positions;
+
+  // Render raw legs in POSITIONS tab
   const el = document.getElementById('upstox-positions');
   if (!el) return;
   if (!positions.length) { el.innerHTML = '<div class="pos-empty">No open positions</div>'; return; }
-  el.innerHTML = '<div class="pos-title">Open Positions</div>' + positions.map(p => {
+  el.innerHTML = positions.map(p => {
     const pnl = p.pnl || 0;
-    return `<div class="pos-row"><span class="pos-symbol">${p.tradingsymbol||'—'}</span><span class="pos-qty">${p.quantity||0}</span><span class="pos-avg">₹${(p.average_price||0).toFixed(2)}</span><span class="${pnl>=0?'pnl-profit':'pnl-loss'}">₹${pnl.toFixed(2)}</span></div>`;
+    return `<div class="pos-row"><span class="pos-symbol">${p.tradingsymbol||p.trading_symbol||'—'}</span><span class="pos-qty">Qty: ${p.quantity||p.net_quantity||0}</span><span class="pos-avg">Avg: ₹${(p.average_price||p.buy_price||0).toFixed(2)}</span><span class="${pnl>=0?'pnl-profit':'pnl-loss'}">P&L: ₹${pnl.toFixed(2)}</span></div>`;
   }).join('');
+
+  // Trigger strategy detection in app.js
+  if (typeof detectAndLogPositions === 'function') detectAndLogPositions(positions);
 }
 
 async function upstoxFetchMargins() {

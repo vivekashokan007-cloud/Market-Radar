@@ -313,6 +313,25 @@ html, body {
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
+/* ── Position Cards (Phase 2) ── */
+.pos-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+.pos-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.pos-strat-name { font-weight: 700; color: var(--amber); font-size: 14px; }
+.pos-rec { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 12px; letter-spacing: 0.5px; }
+.rec-hold { background: #5a4d0a; color: #f0d050; }
+.rec-exit { background: #5a1a1a; color: #ff6b6b; }
+.rec-trail { background: #1a4a1a; color: #6bff6b; }
+.pos-card-index { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+.pos-card-legs { font-size: 11px; color: var(--text); margin-bottom: 6px; }
+.pos-card-pnl { font-size: 12px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+.hist-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; gap: 4px; }
+.hist-strat { font-weight: 600; color: var(--amber); flex: 1; }
+.hist-index { color: var(--text-dim); }
+.hist-expiry { color: var(--text-dim); }
+.status-open { color: #f0d050; }
+.status-closed { color: #6bff6b; }
+.status-expired { color: var(--text-dim); }
+
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   body { padding-bottom: env(safe-area-inset-bottom); }
   .drawer { padding-bottom: env(safe-area-inset-bottom); }
