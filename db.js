@@ -47,7 +47,11 @@ async function dbInsertTrade(trade) {
     target_profit: trade.target_profit || null,
     stop_loss: trade.stop_loss || null,
     lots: trade.lots || 1,
-    status: 'OPEN'
+    status: 'OPEN',
+    // Thesis snapshot — for chain-aware smart exits
+    entry_pcr: trade.entry_pcr || null,
+    entry_max_pain: trade.entry_max_pain || null,
+    entry_sell_oi: trade.entry_sell_oi || null
   };
 
   // Flatten legs 1-4

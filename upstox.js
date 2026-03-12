@@ -457,11 +457,89 @@ async function upstoxLightFetch() {
   if (!token || !isMarketHours()) return;
 
   try {
-    // Only 3 calls: spots + positions + trade book
+    // Core 3 calls: spots + positions + trade book
     await upstoxFetchSpots();
     await upstoxFetchPositions();
     await upstoxFetchTradeBook();
-    console.log('[upstox] Light fetch complete (positions only)');
+
+    // Smart chain fetch: ONLY for expiries with open positions
+    // Store in _POSITION_CHAINS (NOT _CHAINS) to avoid touching SIGNAL/COMMAND
+    if (typeof dbGetOpenTrades === 'function') {
+      const openTrades = await dbGetOpenTrades();
+      if (openTrades.length > 0) {
+        // Collect unique index+expiry pairs
+        const needed = new Set();
+        for (const t of openTrades) {
+          if (t.index_key && t.expiry) needed.add(`${t.index_key}|${t.expiry}`);
+        }
+
+        if (!window._POSITION_CHAINS) window._POSITION_CHAINS = {};
+
+        for (const key of needed) {
+          const [indexKey, expiry] = key.split('|');
+          const instrument = indexKey === 'NF' ? 'NSE_INDEX|Nifty 50' : 'NSE_INDEX|Nifty Bank';
+          try {
+            // Fetch chain into _POSITION_CHAINS (separate from _CHAINS)
+            const resp = await fetch(_bust(`${UPSTOX_API}/option/chain?instrument_key=${encodeURIComponent(instrument)}&expiry_date=${expiry}`), { headers: _headers() });
+            const data = await resp.json();
+            if (data.status === 'success' && Array.isArray(data.data)) {
+              const isNF = indexKey === 'NF';
+              const spot = gv(isNF ? 'nf_price' : 'bn_price') || 0;
+              let putOI = 0, callOI = 0;
+              const sellStrikeOI = {};
+
+              for (const item of data.data) {
+                const strike = item.strike_price || item.strikePrice || item.strike;
+                if (!strike) continue;
+                const callData = item.call_options || item.callOptions || item.CE;
+                const putData = item.put_options || item.putOptions || item.PE;
+                if (callData) {
+                  const md = callData.market_data || callData;
+                  callOI += md.oi || md.open_interest || 0;
+                  sellStrikeOI[`${strike}_CE`] = md.oi || md.open_interest || 0;
+                }
+                if (putData) {
+                  const md = putData.market_data || putData;
+                  putOI += md.oi || md.open_interest || 0;
+                  sellStrikeOI[`${strike}_PE`] = md.oi || md.open_interest || 0;
+                }
+              }
+
+              const pcr = callOI > 0 ? +(putOI / callOI).toFixed(2) : 0;
+
+              // Max Pain calculation
+              const allStrikes = [...new Set(data.data.map(d => d.strike_price || d.strikePrice || d.strike))].filter(Boolean).sort((a,b) => a - b);
+              let mpStrike = 0, minPain = Infinity;
+              const coiMap = {}, poiMap = {};
+              for (const item of data.data) {
+                const s = item.strike_price || item.strikePrice || item.strike;
+                if (!s) continue;
+                const cd = item.call_options || item.callOptions || item.CE;
+                const pd = item.put_options || item.putOptions || item.PE;
+                if (cd) coiMap[s] = (cd.market_data || cd).oi || (cd.market_data || cd).open_interest || 0;
+                if (pd) poiMap[s] = (pd.market_data || pd).oi || (pd.market_data || pd).open_interest || 0;
+              }
+              for (const c of allStrikes) {
+                let pain = 0;
+                for (const k in coiMap) { if (coiMap[k] > 0 && c > +k) pain += (c - +k) * coiMap[k]; }
+                for (const k in poiMap) { if (poiMap[k] > 0 && c < +k) pain += (+k - c) * poiMap[k]; }
+                if (pain < minPain) { minPain = pain; mpStrike = c; }
+              }
+
+              window._POSITION_CHAINS[key] = { pcr, maxPain: mpStrike, callOI, putOI, sellStrikeOI, spot };
+              console.log(`[upstox] Position chain: ${key} — PCR=${pcr}, MaxPain=${mpStrike}`);
+            }
+          } catch(e) {
+            console.warn(`[upstox] Position chain fetch failed for ${key}:`, e.message);
+          }
+        }
+
+        // Trigger thesis check in app.js
+        if (typeof checkThesisAndNotify === 'function') checkThesisAndNotify(openTrades);
+      }
+    }
+
+    console.log('[upstox] Light fetch complete');
   } catch(e) {
     console.warn('[upstox] Light fetch error:', e.message);
   }

@@ -905,6 +905,23 @@ async function detectAndLogPositions(rawPositions) {
       trade.target_profit = +(trade.max_profit * 0.5).toFixed(0);
       trade.stop_loss = +(trade.max_loss * 0.5).toFixed(0);
 
+      // ── Entry thesis snapshot — for smart exit checks ──
+      const entryChain = window._CHAINS[indexKey] && window._CHAINS[indexKey][expiry];
+      if (entryChain) {
+        trade.entry_pcr = entryChain.pcr || null;
+        trade.entry_max_pain = entryChain.maxPain || null;
+        // OI at sell strike(s)
+        const sellLegs = legs.filter(l => l.action === 'SELL');
+        if (sellLegs.length > 0 && entryChain.strikes) {
+          let totalSellOI = 0;
+          for (const sl of sellLegs) {
+            const sd = entryChain.strikes[sl.strike];
+            if (sd && sd[sl.type]) totalSellOI += sd[sl.type].oi || 0;
+          }
+          trade.entry_sell_oi = totalSellOI;
+        }
+      }
+
       const result = await dbInsertTrade(trade);
       console.log(`[positions] Logged new ${stratType}: ${indexKey} ${expiry}`, result);
       detected.push({ ...trade, id: result.id, legs, status: 'OPEN', recommendation: 'HOLD', current_pnl: 0 });
@@ -1067,6 +1084,9 @@ function computeRecommendation(trade, currentPnl, currentSpot, expiry) {
   const isCredit = ['BULL_PUT','BEAR_CALL','IRON_CONDOR'].includes(trade.strategy_type);
   const peakPnl = trade.peak_pnl || 0;
 
+  // ── Thesis check from position chains ──
+  const thesis = checkThesis(trade);
+
   // ── EXIT NOW: hard limits ──
   if (target > 0 && currentPnl >= target) return 'EXIT_NOW';
   if (sl > 0 && currentPnl <= -sl) return 'EXIT_NOW';
@@ -1080,14 +1100,17 @@ function computeRecommendation(trade, currentPnl, currentSpot, expiry) {
   }
   if (isCredit && dte <= 3 && currentPnl < 0) return 'EXIT_NOW';
 
-  // ── BOOK PROFIT: take the money ──
+  // ── BOOK PROFIT: profitable + thesis breaking OR high % of target ──
+  if (thesis.severity >= 2 && currentPnl > 0) return 'BOOK_PROFIT';
   if (target > 0 && currentPnl >= target * 0.35 && dte <= 5) return 'BOOK_PROFIT';
   if (target > 0 && currentPnl >= target * 0.40) return 'BOOK_PROFIT';
 
-  // ── EXIT EARLY: deterioration from peak ──
-  if (peakPnl > 0 && currentPnl > 0 && currentPnl < peakPnl * 0.70) return 'EXIT_EARLY';
-  // Was profitable, now losing
-  if (peakPnl > target * 0.20 && currentPnl <= 0) return 'EXIT_EARLY';
+  // ── EXIT EARLY: losing + thesis breaking ──
+  if (thesis.severity >= 2 && currentPnl < 0) return 'EXIT_EARLY';
+  // P&L declining from peak (only if thesis also weakening)
+  if (peakPnl > 0 && currentPnl > 0 && currentPnl < peakPnl * 0.70 && thesis.severity >= 1) return 'EXIT_EARLY';
+  // Was profitable, now losing + any thesis concern
+  if (peakPnl > target * 0.20 && currentPnl <= 0 && thesis.severity >= 1) return 'EXIT_EARLY';
 
   // ── TRAIL: protect gains ──
   if (isCredit) {
@@ -1194,6 +1217,154 @@ function renderAlertBanner(alerts) {
   el.style.display = 'block';
   el.innerHTML = alerts.map(a => `<div class="alert-banner-row">${a.title}<br><span class="alert-banner-detail">${a.body}</span></div>`).join('');
   el.onclick = () => go(2); // Tap → POSITIONS tab
+}
+
+// ═══════════════════════════════════════════════════
+// THESIS CHECK — Chain-aware smart exits
+// Called by auto-fetch with position-specific chains
+// ═══════════════════════════════════════════════════
+
+function checkThesis(trade) {
+  // Returns: { intact: bool, signals: [], severity: 0-3 }
+  const key = `${trade.index_key}|${trade.expiry}`;
+
+  // Try position-specific chains first (from auto-fetch), then full chains (from manual fetch)
+  let chain = (window._POSITION_CHAINS || {})[key];
+  if (!chain) {
+    // Build from full _CHAINS if available
+    const fullChain = window._CHAINS && window._CHAINS[trade.index_key] && window._CHAINS[trade.index_key][trade.expiry];
+    if (fullChain) {
+      const sellStrikeOI = {};
+      for (const sk in fullChain.strikes) {
+        const sd = fullChain.strikes[sk];
+        if (sd.CE) sellStrikeOI[`${sk}_CE`] = sd.CE.oi || 0;
+        if (sd.PE) sellStrikeOI[`${sk}_PE`] = sd.PE.oi || 0;
+      }
+      chain = { pcr: fullChain.pcr, maxPain: fullChain.maxPain, callOI: fullChain.callOI, putOI: fullChain.putOI, sellStrikeOI, spot: fullChain.spot };
+    }
+  }
+  if (!chain) return { intact: true, signals: [], severity: 0 };
+
+  const signals = [];
+  let severity = 0;
+
+  // ── Check 1: PCR drift ──
+  if (trade.entry_pcr && chain.pcr) {
+    const drift = chain.pcr - trade.entry_pcr;
+    const isCredit = ['BULL_PUT','BEAR_CALL','IRON_CONDOR'].includes(trade.strategy_type);
+    const isBearish = ['BEAR_CALL','IRON_CONDOR'].includes(trade.strategy_type);
+    const isBullish = ['BULL_PUT'].includes(trade.strategy_type);
+
+    // Bear strategies hurt when PCR rises (puts unwinding = bullish shift)
+    if (isBearish && drift > 0.15) {
+      signals.push(`PCR shifted ${trade.entry_pcr}→${chain.pcr} (bullish drift)`);
+      severity += drift > 0.25 ? 2 : 1;
+    }
+    // Bull strategies hurt when PCR drops (calls unwinding = bearish shift)
+    if (isBullish && drift < -0.15) {
+      signals.push(`PCR shifted ${trade.entry_pcr}→${chain.pcr} (bearish drift)`);
+      severity += drift < -0.25 ? 2 : 1;
+    }
+  }
+
+  // ── Check 2: Max Pain migration ──
+  if (trade.entry_max_pain && chain.maxPain) {
+    const spot = chain.spot || gv(trade.index_key === 'NF' ? 'nf_price' : 'bn_price') || 0;
+    const mpShift = chain.maxPain - trade.entry_max_pain;
+    const isNF = trade.index_key === 'NF';
+    const threshold = isNF ? 100 : 300;
+
+    // If you're in a bear trade and max pain moved DOWN significantly, 
+    // institutions accept lower levels — your protection is weaker
+    const isBearish = ['BEAR_CALL','IRON_CONDOR'].includes(trade.strategy_type);
+    const isBullish = ['BULL_PUT','BULL_CALL'].includes(trade.strategy_type);
+
+    if (isBearish && mpShift > threshold) {
+      signals.push(`MaxPain shifted UP ${trade.entry_max_pain}→${chain.maxPain} (against bear thesis)`);
+      severity += mpShift > threshold * 2 ? 2 : 1;
+    }
+    if (isBullish && mpShift < -threshold) {
+      signals.push(`MaxPain shifted DOWN ${trade.entry_max_pain}→${chain.maxPain} (against bull thesis)`);
+      severity += mpShift < -threshold * 2 ? 2 : 1;
+    }
+  }
+
+  // ── Check 3: OI buildup at sell strike ──
+  if (trade.entry_sell_oi && chain.sellStrikeOI) {
+    // Check OI at all sell legs
+    let currentSellOI = 0;
+    for (let i = 1; i <= 4; i++) {
+      const strike = trade[`leg${i}_strike`];
+      const type = trade[`leg${i}_type`];
+      const action = trade[`leg${i}_action`];
+      if (strike && type && action === 'SELL') {
+        const oiKey = `${strike}_${type}`;
+        currentSellOI += chain.sellStrikeOI[oiKey] || 0;
+      }
+    }
+
+    if (trade.entry_sell_oi > 0 && currentSellOI > 0) {
+      const oiRatio = currentSellOI / trade.entry_sell_oi;
+      if (oiRatio > 1.5) {
+        signals.push(`OI at sell strike(s) up ${((oiRatio - 1) * 100).toFixed(0)}% (adversary pressure)`);
+        severity += oiRatio > 2.0 ? 2 : 1;
+      }
+    }
+  }
+
+  return {
+    intact: severity < 2,
+    signals,
+    severity: Math.min(3, severity) // 0=solid, 1=watch, 2=weakening, 3=broken
+  };
+}
+
+function checkThesisAndNotify(openTrades) {
+  if (!openTrades || !openTrades.length) return;
+
+  const alerts = [];
+
+  for (const trade of openTrades) {
+    const thesis = checkThesis(trade);
+    const pnl = trade.current_pnl || 0;
+    const target = trade.target_profit || 0;
+    const stratName = STRAT_LABELS[trade.strategy_type] || trade.strategy_type;
+    const pnlStr = (pnl >= 0 ? '+' : '') + '₹' + pnl.toLocaleString('en-IN');
+
+    if (thesis.severity >= 2) {
+      // Thesis breaking
+      if (pnl > 0) {
+        // Profitable but thesis breaking → BOOK PROFIT
+        alerts.push({
+          title: `🟢 BOOK PROFIT — ${stratName} ${trade.index_key}`,
+          body: `${pnlStr} · Thesis weakening: ${thesis.signals.join('; ')}`,
+          priority: 3, rec: 'BOOK_PROFIT'
+        });
+      } else {
+        // Losing AND thesis breaking → EXIT EARLY
+        alerts.push({
+          title: `🟠 EXIT EARLY — ${stratName} ${trade.index_key}`,
+          body: `${pnlStr} · Thesis broken: ${thesis.signals.join('; ')}`,
+          priority: 4, rec: 'EXIT_EARLY'
+        });
+      }
+    } else if (thesis.severity === 1 && pnl < 0) {
+      // Thesis weakening + losing → warn
+      alerts.push({
+        title: `🟡 WATCH — ${stratName} ${trade.index_key}`,
+        body: `${pnlStr} · ${thesis.signals.join('; ')}`,
+        priority: 2, rec: 'TRAIL'
+      });
+    }
+    // thesis.severity === 0 + P&L dropping → noise, HOLD (no alert)
+  }
+
+  if (alerts.length > 0) {
+    alerts.sort((a, b) => b.priority - a.priority);
+    const top = alerts[0];
+    fireNotification(top.title, top.body, `mr-thesis-${top.rec}`);
+    renderAlertBanner(alerts);
+  }
 }
 
 // ═══════════════════════════════════════════════════
