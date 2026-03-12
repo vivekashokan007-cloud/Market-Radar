@@ -1,7 +1,7 @@
 /* ============================================================
-   app.js — Market Radar v5.0 — Phase 2 Active
-   EV-based scoring, target/SL, moneyness labels
-   Split display: Top 5 NF + Top 5 BNF
+   app.js — Market Radar v5.0 — Phase 3 Active
+   EV-based scoring, Varsity multiplier, split display
+   Auto-expire, trade journal, cumulative stats
    All 7 strategies × all expiries × both indices
    ============================================================ */
 
@@ -909,16 +909,20 @@ async function detectAndLogPositions(rawPositions) {
       console.log(`[positions] Logged new ${stratType}: ${indexKey} ${expiry}`, result);
       detected.push({ ...trade, id: result.id, legs, status: 'OPEN', recommendation: 'HOLD', current_pnl: 0 });
     } else {
-      // Existing trade — update with live P&L
+      // Existing trade — update with live P&L + track peak
       const livePnl = legs.reduce((sum, l) => sum + l.pnl, 0);
       const liveSpot = gv(indexKey === 'NF' ? 'nf_price' : 'bn_price');
+      const prevPeak = existing.peak_pnl || 0;
+      const newPeak = Math.max(prevPeak, livePnl);
+      existing.peak_pnl = newPeak; // Pass to computeRecommendation
       const rec = computeRecommendation(existing, livePnl, liveSpot, expiry);
       await dbUpdateTrade(existing.id, {
         current_pnl: +livePnl.toFixed(0),
         current_spot: liveSpot,
-        recommendation: rec
+        recommendation: rec,
+        peak_pnl: +newPeak.toFixed(0)
       });
-      detected.push({ ...existing, legs, current_pnl: +livePnl.toFixed(0), recommendation: rec });
+      detected.push({ ...existing, legs, current_pnl: +livePnl.toFixed(0), peak_pnl: +newPeak.toFixed(0), recommendation: rec });
     }
   }
 
@@ -928,6 +932,11 @@ async function detectAndLogPositions(rawPositions) {
   // Store and render
   window._DETECTED_POSITIONS = detected;
   renderPositionsTab();
+  // Smart alerts + notifications
+  checkAndNotify(detected);
+  // Phase 3: auto-expire past trades + refresh journal
+  await autoExpireOpenTrades();
+  renderJournalTab();
 }
 
 async function autoCloseGonePositions(activeKeys) {
@@ -947,6 +956,107 @@ async function autoCloseGonePositions(activeKeys) {
 }
 
 // ═══════════════════════════════════════════════════
+// TRADE BOOK EXIT MATCHING — Real P&L from fills
+// ═══════════════════════════════════════════════════
+
+async function matchTradeBookExits(trades) {
+  if (!trades || !trades.length) return;
+  if (typeof dbGetOpenTrades !== 'function') return;
+
+  const openTrades = await dbGetOpenTrades();
+  if (!openTrades.length) return;
+
+  // Parse trade book fills
+  const fills = [];
+  for (const t of trades) {
+    const sym = t.tradingsymbol || t.trading_symbol || '';
+    const parsed = parseUpstoxSymbol(sym);
+    if (!parsed) continue;
+    fills.push({
+      ...parsed,
+      txnType: t.transaction_type || '',  // BUY or SELL
+      price: t.price || t.average_price || 0,
+      qty: Math.abs(t.quantity || 0),
+      tradeId: t.trade_id || '',
+      tradedAt: t.traded_at || t.fill_timestamp || ''
+    });
+  }
+
+  if (!fills.length) return;
+
+  // For each OPEN trade, check if trade book has exit fills
+  for (const trade of openTrades) {
+    const legs = [];
+    for (let i = 1; i <= 4; i++) {
+      if (trade[`leg${i}_strike`]) {
+        legs.push({
+          strike: trade[`leg${i}_strike`],
+          type: trade[`leg${i}_type`],
+          action: trade[`leg${i}_action`],
+          entryLtp: trade[`leg${i}_entry_ltp`] || 0
+        });
+      }
+    }
+    if (!legs.length) continue;
+
+    // Find exit fills: same strike+type but REVERSED action
+    // Entry SELL → Exit BUY, Entry BUY → Exit SELL
+    const exitFills = [];
+    for (const leg of legs) {
+      const reverseAction = leg.action === 'SELL' ? 'BUY' : 'SELL';
+      const match = fills.find(f =>
+        f.indexKey === trade.index_key &&
+        f.expiry === trade.expiry &&
+        f.strike === leg.strike &&
+        f.type === leg.type &&
+        f.txnType === reverseAction
+      );
+      if (match) exitFills.push({ ...leg, exitPrice: match.price, exitTime: match.tradedAt });
+    }
+
+    // All legs must have exit fills (all legs cleared at once)
+    if (exitFills.length !== legs.length) continue;
+
+    // Calculate real P&L from actual fill prices
+    const lotSize = trade.index_key === 'NF' ? NF_LOT_SIZE : BNF_LOT;
+    const lots = trade.lots || 1;
+    let exitPremium = 0, entryPremium = 0;
+
+    for (const ef of exitFills) {
+      const entryMult = ef.action === 'SELL' ? 1 : -1;  // credit +, debit -
+      const exitMult = ef.action === 'SELL' ? -1 : 1;     // closing reverses
+      entryPremium += entryMult * ef.entryLtp;
+      exitPremium += exitMult * ef.exitPrice;
+    }
+
+    // P&L = (entry premium + exit premium) × lotSize × lots
+    // For credit: entry +ve (collected), exit -ve (paid to close) → profit if exit < entry
+    // For debit: entry -ve (paid), exit +ve (received) → profit if exit > entry
+    const actualPnl = +((entryPremium + exitPremium) * lotSize * lots).toFixed(0);
+
+    // Determine exit reason
+    const target = trade.target_profit || 0;
+    const sl = trade.stop_loss || 0;
+    let exitReason = 'MANUAL';
+    if (target > 0 && actualPnl >= target * 0.8) exitReason = 'TARGET';
+    else if (sl > 0 && actualPnl <= -(sl * 0.8)) exitReason = 'SL';
+
+    // Close trade in Supabase with real P&L
+    await dbCloseTrade(trade.id, {
+      status: 'CLOSED',
+      exit_premium: +exitPremium.toFixed(2),
+      actual_pnl: actualPnl,
+      exit_reason: exitReason
+    });
+
+    console.log(`[tradebook] Matched exit for #${trade.id}: ${trade.strategy_type} ${trade.index_key} ${trade.expiry} → P&L ₹${actualPnl} (${exitReason})`);
+  }
+
+  // Refresh journal after processing exits
+  if (typeof renderJournalTab === 'function') renderJournalTab();
+}
+
+// ═══════════════════════════════════════════════════
 // HOLD / EXIT / TRAIL ENGINE
 // ═══════════════════════════════════════════════════
 
@@ -955,34 +1065,135 @@ function computeRecommendation(trade, currentPnl, currentSpot, expiry) {
   const sl = trade.stop_loss || 0;
   const dte = daysTo(expiry);
   const isCredit = ['BULL_PUT','BEAR_CALL','IRON_CONDOR'].includes(trade.strategy_type);
+  const peakPnl = trade.peak_pnl || 0;
 
-  // Target hit
-  if (target > 0 && currentPnl >= target) return 'EXIT';
-  // Stop loss hit
-  if (sl > 0 && currentPnl <= -sl) return 'EXIT';
+  // ── EXIT NOW: hard limits ──
+  if (target > 0 && currentPnl >= target) return 'EXIT_NOW';
+  if (sl > 0 && currentPnl <= -sl) return 'EXIT_NOW';
+  // Spot breaching sell strike danger zone
+  if (currentSpot && trade.leg1_strike) {
+    const vix = gv('india_vix') || 14;
+    const tdte = tradingDaysTo(expiry);
+    const em = bsExpectedMove(currentSpot, vix, tdte);
+    const sellStrike = trade.leg1_strike;
+    if (Math.abs(currentSpot - sellStrike) < em.one_sigma * 0.5) return 'EXIT_NOW';
+  }
+  if (isCredit && dte <= 3 && currentPnl < 0) return 'EXIT_NOW';
 
+  // ── BOOK PROFIT: take the money ──
+  if (target > 0 && currentPnl >= target * 0.35 && dte <= 5) return 'BOOK_PROFIT';
+  if (target > 0 && currentPnl >= target * 0.40) return 'BOOK_PROFIT';
+
+  // ── EXIT EARLY: deterioration from peak ──
+  if (peakPnl > 0 && currentPnl > 0 && currentPnl < peakPnl * 0.70) return 'EXIT_EARLY';
+  // Was profitable, now losing
+  if (peakPnl > target * 0.20 && currentPnl <= 0) return 'EXIT_EARLY';
+
+  // ── TRAIL: protect gains ──
   if (isCredit) {
-    // DTE ≤ 3 and profitable → EXIT (gamma risk)
-    if (dte <= 3 && currentPnl > 0) return 'EXIT';
-    // DTE ≤ 3 and losing → EXIT (cut before expiry)
-    if (dte <= 3 && currentPnl < 0) return 'EXIT';
-    // Spot within danger zone of sell strike
-    if (currentSpot && trade.leg1_strike) {
-      const vix = gv('india_vix') || 14;
-      const tdte = tradingDaysTo(expiry);
-      const em = bsExpectedMove(currentSpot, vix, tdte);
-      const sellStrike = trade.leg1_strike; // First leg is SELL for credit spreads
-      if (Math.abs(currentSpot - sellStrike) < em.one_sigma * 0.5) return 'EXIT';
-    }
-    // DTE 4-10 and profit > 30% of max → TRAIL
-    if (dte >= 4 && dte <= 10 && trade.max_profit && currentPnl > trade.max_profit * 0.3) return 'TRAIL';
+    if (dte >= 4 && dte <= 10 && trade.max_profit && currentPnl > trade.max_profit * 0.30) return 'TRAIL';
   } else {
-    // Debit strategies
-    if (dte <= 5 && currentPnl <= 0) return 'EXIT'; // No move, theta killing
-    if (currentPnl > 0 && trade.max_loss && currentPnl > trade.max_loss * 0.2) return 'TRAIL';
+    if (dte <= 5 && currentPnl <= 0) return 'EXIT_NOW'; // Debit: no move, theta killing
+    if (currentPnl > 0 && trade.max_loss && currentPnl > trade.max_loss * 0.20) return 'TRAIL';
   }
 
   return 'HOLD';
+}
+
+const ALERT_META = {
+  EXIT_NOW:    { label: 'EXIT NOW',    css: 'rec-exit',   banner: 'alert-exit',   icon: '🔴', priority: 5 },
+  EXIT_EARLY:  { label: 'EXIT EARLY',  css: 'rec-early',  banner: 'alert-early',  icon: '🟠', priority: 4 },
+  BOOK_PROFIT: { label: 'BOOK PROFIT', css: 'rec-book',   banner: 'alert-book',   icon: '🟢', priority: 3 },
+  TRAIL:       { label: 'TRAIL',       css: 'rec-trail',  banner: 'alert-trail',  icon: '🟡', priority: 2 },
+  HOLD:        { label: 'HOLD',        css: 'rec-hold',   banner: '',             icon: '⚪', priority: 0 }
+};
+
+// ═══════════════════════════════════════════════════
+// NOTIFICATION ENGINE — PWA Android Notifications
+// ═══════════════════════════════════════════════════
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  const perm = await Notification.requestPermission();
+  return perm === 'granted';
+}
+
+async function fireNotification(title, body, tag) {
+  const hasPermission = await requestNotificationPermission();
+  if (!hasPermission) return;
+
+  // Use service worker registration if available
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    const reg = await navigator.serviceWorker.ready;
+    reg.showNotification(title, {
+      body: body,
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="80" font-size="80">⚡</text></svg>',
+      badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="80" font-size="80">⚡</text></svg>',
+      tag: tag || 'market-radar',
+      renotify: true,
+      requireInteraction: true,
+      vibrate: [200, 100, 200]
+    });
+  } else {
+    // Fallback: basic Notification API
+    new Notification(title, { body: body, tag: tag || 'market-radar' });
+  }
+}
+
+function checkAndNotify(positions) {
+  if (!positions || !positions.length) return;
+
+  const alerts = [];
+  for (const pos of positions) {
+    const rec = pos.recommendation || 'HOLD';
+    const meta = ALERT_META[rec];
+    if (!meta || meta.priority < 3) continue; // Only BOOK_PROFIT, EXIT_EARLY, EXIT_NOW
+
+    const stratName = STRAT_LABELS[pos.strategy_type] || pos.strategy_type;
+    const pnl = pos.current_pnl || 0;
+    const pnlStr = (pnl >= 0 ? '+' : '') + '₹' + pnl.toLocaleString('en-IN');
+    const target = pos.target_profit || 0;
+    const pct = target > 0 ? Math.round((pnl / target) * 100) : 0;
+
+    alerts.push({
+      title: `${meta.icon} ${meta.label} — ${stratName} ${pos.index_key}`,
+      body: `P&L ${pnlStr} (${pct}% of target) · DTE ${daysTo(pos.expiry)}`,
+      priority: meta.priority,
+      rec: rec
+    });
+  }
+
+  // Fire notification for highest priority alert
+  if (alerts.length > 0) {
+    alerts.sort((a, b) => b.priority - a.priority);
+    const top = alerts[0];
+    fireNotification(top.title, top.body, `mr-${top.rec}`);
+  }
+
+  // Render banner on all tabs
+  renderAlertBanner(alerts);
+}
+
+function renderAlertBanner(alerts) {
+  const el = document.getElementById('alert-banner');
+  if (!el) return;
+
+  if (!alerts || !alerts.length) {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+
+  alerts.sort((a, b) => b.priority - a.priority);
+  const top = alerts[0];
+  const bannerClass = ALERT_META[top.rec] ? ALERT_META[top.rec].banner : '';
+
+  el.className = `alert-banner ${bannerClass}`;
+  el.style.display = 'block';
+  el.innerHTML = alerts.map(a => `<div class="alert-banner-row">${a.title}<br><span class="alert-banner-detail">${a.body}</span></div>`).join('');
+  el.onclick = () => go(2); // Tap → POSITIONS tab
 }
 
 // ═══════════════════════════════════════════════════
@@ -1000,18 +1211,19 @@ async function renderPositionsTab() {
     openEl.innerHTML = '<div class="cmd-placeholder">No open positions detected</div>';
   } else {
     openEl.innerHTML = detected.map(pos => {
-      const recClass = pos.recommendation === 'EXIT' ? 'rec-exit' : pos.recommendation === 'TRAIL' ? 'rec-trail' : 'rec-hold';
+      const meta = ALERT_META[pos.recommendation] || ALERT_META.HOLD;
       const pnlClass = (pos.current_pnl || 0) >= 0 ? 'profit' : 'loss';
       const legStr = (pos.legs || []).map(l => `${l.action} ${l.strike} ${l.type}`).join(' | ');
+      const peakStr = pos.peak_pnl ? ` · Peak: ₹${pos.peak_pnl.toLocaleString('en-IN')}` : '';
       return `<div class="pos-card">
         <div class="pos-card-header">
           <span class="pos-strat-name">${STRAT_LABELS[pos.strategy_type] || pos.strategy_type}</span>
-          <span class="pos-rec ${recClass}">${pos.recommendation}</span>
+          <span class="pos-rec ${meta.css}">${meta.label}</span>
         </div>
         <div class="pos-card-index">${pos.index_key} · ${pos.expiry} · DTE ${daysTo(pos.expiry)}</div>
         <div class="pos-card-legs">${legStr}</div>
         <div class="pos-card-pnl">
-          <span>Current P&L: <span class="${pnlClass}">₹${(pos.current_pnl||0).toLocaleString('en-IN')}</span></span>
+          <span>P&L: <span class="${pnlClass}">₹${(pos.current_pnl||0).toLocaleString('en-IN')}</span>${peakStr}</span>
           <span>Target: ₹${(pos.target_profit||0).toLocaleString('en-IN')} | SL: ₹${(pos.stop_loss||0).toLocaleString('en-IN')}</span>
         </div>
       </div>`;
@@ -1041,18 +1253,140 @@ async function renderPositionsTab() {
 }
 
 // ═══════════════════════════════════════════════════
+// PHASE 3: AUTO-EXPIRE + TRADE JOURNAL
+// ═══════════════════════════════════════════════════
+
+async function autoExpireOpenTrades() {
+  if (typeof dbGetOpenTrades !== 'function') return;
+  const openTrades = await dbGetOpenTrades();
+  if (!openTrades.length) return;
+
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  for (const trade of openTrades) {
+    if (!trade.expiry) continue;
+    const expDate = new Date(trade.expiry); expDate.setHours(0,0,0,0);
+    if (expDate >= today) continue; // Not yet expired
+
+    // Trade has expired — calculate final P&L
+    let finalPnl = trade.current_pnl || 0;
+
+    // If we have last known spot + legs, calculate intrinsic value at expiry
+    const lastSpot = trade.current_spot || trade.entry_spot || 0;
+    if (lastSpot > 0 && trade.leg1_strike) {
+      const isCredit = ['BULL_PUT','BEAR_CALL','IRON_CONDOR'].includes(trade.strategy_type);
+      const lotSize = trade.index_key === 'NF' ? NF_LOT_SIZE : BNF_LOT;
+      const lots = trade.lots || 1;
+
+      // Calculate intrinsic at expiry for each leg
+      let intrinsic = 0;
+      for (let i = 1; i <= 4; i++) {
+        const strike = trade[`leg${i}_strike`];
+        const type = trade[`leg${i}_type`];
+        const action = trade[`leg${i}_action`];
+        const entryLtp = trade[`leg${i}_entry_ltp`] || 0;
+        if (!strike || !type || !action) continue;
+
+        const expiryVal = type === 'CE' ? Math.max(lastSpot - strike, 0) : Math.max(strike - lastSpot, 0);
+        const mult = action === 'SELL' ? -1 : 1;
+        intrinsic += mult * (expiryVal - entryLtp);
+      }
+      finalPnl = +(intrinsic * lotSize * lots).toFixed(0);
+    }
+
+    if (typeof dbExpireTrade === 'function') {
+      await dbExpireTrade(trade.id, finalPnl);
+      console.log(`[journal] Auto-expired trade #${trade.id}: ${trade.strategy_type} ${trade.index_key} ${trade.expiry} → P&L ₹${finalPnl}`);
+    }
+  }
+}
+
+async function renderJournalTab() {
+  const statsEl = document.getElementById('journal-stats');
+  const tradesEl = document.getElementById('journal-trades');
+  if (!statsEl) return;
+
+  // Fetch stats
+  const stats = typeof dbGetTradeStats === 'function' ? await dbGetTradeStats() : null;
+
+  if (!stats) {
+    statsEl.innerHTML = '<div class="cmd-placeholder">No closed trades yet — complete a trade to see journal</div>';
+    if (tradesEl) tradesEl.innerHTML = '';
+    return;
+  }
+
+  // Render stats summary
+  const pnlClass = stats.totalPnl >= 0 ? 'profit' : 'loss';
+  let stratRows = '';
+  for (const st in stats.byStrat) {
+    const s = stats.byStrat[st];
+    const wr = s.total > 0 ? ((s.wins / s.total) * 100).toFixed(0) : 0;
+    const spnl = s.pnl >= 0 ? 'profit' : 'loss';
+    stratRows += `<div class="journal-strat-row"><span>${STRAT_LABELS[st] || st}</span><span>${s.wins}/${s.total} (${wr}%)</span><span class="${spnl}">₹${s.pnl.toLocaleString('en-IN')}</span></div>`;
+  }
+
+  statsEl.innerHTML = `
+    <div class="journal-stats-grid">
+      <div class="journal-stat"><div class="journal-stat-val ${pnlClass}">₹${stats.totalPnl.toLocaleString('en-IN')}</div><div class="journal-stat-label">Total P&L</div></div>
+      <div class="journal-stat"><div class="journal-stat-val">${stats.winRate}%</div><div class="journal-stat-label">Win Rate (${stats.wins}/${stats.total})</div></div>
+      <div class="journal-stat"><div class="journal-stat-val">₹${stats.avgPnl.toLocaleString('en-IN')}</div><div class="journal-stat-label">Avg P&L / Trade</div></div>
+      <div class="journal-stat"><div class="journal-stat-val">${stats.total}</div><div class="journal-stat-label">Total Trades</div></div>
+      <div class="journal-stat"><div class="journal-stat-val profit">₹${stats.bestTrade.pnl.toLocaleString('en-IN')}</div><div class="journal-stat-label">Best (${stats.bestTrade.type} ${stats.bestTrade.index})</div></div>
+      <div class="journal-stat"><div class="journal-stat-val loss">₹${stats.worstTrade.pnl.toLocaleString('en-IN')}</div><div class="journal-stat-label">Worst (${stats.worstTrade.type} ${stats.worstTrade.index})</div></div>
+    </div>
+    ${stratRows ? '<div class="section-title" style="margin-top:8px;font-size:11px">By Strategy</div>' + stratRows : ''}
+  `;
+
+  // Render recent closed trades
+  if (!tradesEl) return;
+  const closed = typeof dbGetClosedTrades === 'function' ? await dbGetClosedTrades(15) : [];
+  if (!closed.length) {
+    tradesEl.innerHTML = '<div class="cmd-placeholder">No closed trades</div>';
+    return;
+  }
+
+  tradesEl.innerHTML = closed.map(t => {
+    const pnl = t.actual_pnl || 0;
+    const pClass = pnl >= 0 ? 'profit' : 'loss';
+    const reason = t.exit_reason || 'MANUAL';
+    const reasonClass = reason === 'EXPIRY' ? 'reason-expiry' : reason === 'TARGET' ? 'reason-target' : reason.includes('SL') ? 'reason-sl' : 'reason-manual';
+    const legs = [];
+    for (let i = 1; i <= 4; i++) {
+      if (t[`leg${i}_strike`]) legs.push(`${t[`leg${i}_action`]} ${t[`leg${i}_strike`]} ${t[`leg${i}_type`]}`);
+    }
+    return `<div class="journal-trade">
+      <div class="journal-trade-header">
+        <span class="journal-trade-strat">${STRAT_LABELS[t.strategy_type] || t.strategy_type}</span>
+        <span class="journal-trade-pnl ${pClass}">${pnl >= 0 ? '+' : ''}₹${pnl.toLocaleString('en-IN')}</span>
+      </div>
+      <div class="journal-trade-meta">${t.index_key} · ${t.expiry} · ${t.entry_date || '—'} → ${t.exit_date || '—'}</div>
+      <div class="journal-trade-meta">${legs.join(' | ')}</div>
+      <span class="journal-trade-reason ${reasonClass}">${reason}</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.tab').forEach(tab=>{tab.addEventListener('click',()=>go(parseInt(tab.id.replace('t',''))));});
+  document.querySelectorAll('.tab').forEach(tab=>{
+    tab.addEventListener('click',()=>{
+      const n = parseInt(tab.id.replace('t',''));
+      go(n);
+      // Render journal when switching to CLOSE tab
+      if (n === 3) renderJournalTab();
+    });
+  });
   const lr=document.getElementById('btn-lock-radar'); if(lr) lr.addEventListener('click',toggleRadar);
   const lb=document.getElementById('btn-lock-breadth'); if(lb) lb.addEventListener('click',toggleBreadth);
   const le=document.getElementById('btn-lock-evening'); if(le) le.addEventListener('click',toggleEvening);
   const bh=document.getElementById('btn-bhav-upload'); if(bh) bh.addEventListener('click',handleBhavUpload);
   const dbg=document.getElementById('btn-debug'); if(dbg) dbg.addEventListener('click',showDebug);
   initInputListeners(); initDrawer(); restoreSavedState(); renderEveningSection(); calcScore(); go(0);
-  // Load any existing positions from Supabase on startup
+  // Load positions + auto-expire + journal on startup
   renderPositionsTab();
-  console.log('[app.js] Market Radar v5.0 — Phase 2 Active');
+  autoExpireOpenTrades();
+  console.log('[app.js] Market Radar v5.0 — Phase 3 Active');
 });

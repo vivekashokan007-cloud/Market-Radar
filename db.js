@@ -86,6 +86,7 @@ async function dbUpdateTrade(id, updates) {
   // Allow updating target/SL if recalculated
   if (updates.target_profit != null) row.target_profit = updates.target_profit;
   if (updates.stop_loss != null) row.stop_loss = updates.stop_loss;
+  if (updates.peak_pnl != null) row.peak_pnl = updates.peak_pnl;
 
   const { error } = await db.from('trade_log').update(row).eq('id', id);
   return error ? { ok: false, error: error.message } : { ok: true };
@@ -168,4 +169,93 @@ async function dbFindOpenTrade(indexKey, expiry, leg1Strike, leg1Type, leg1Actio
   return data;
 }
 
-console.log('[db.js] v5.0 Phase 2 — trade_log ready');
+// ═══════════════════════════════════════════════════
+// JOURNAL — Closed trades + stats
+// ═══════════════════════════════════════════════════
+
+async function dbGetClosedTrades(limit) {
+  const db = getDB();
+  if (!db) return [];
+
+  const { data, error } = await db.from('trade_log')
+    .select('*')
+    .in('status', ['CLOSED', 'EXPIRED'])
+    .order('exit_date', { ascending: false })
+    .limit(limit || 20);
+
+  if (error) { console.warn('[db] getClosedTrades error:', error.message); return []; }
+  return data || [];
+}
+
+async function dbGetTradeStats() {
+  const db = getDB();
+  if (!db) return null;
+
+  const { data, error } = await db.from('trade_log')
+    .select('*')
+    .in('status', ['CLOSED', 'EXPIRED']);
+
+  if (error) { console.warn('[db] getTradeStats error:', error.message); return null; }
+  if (!data || !data.length) return null;
+
+  const total = data.length;
+  const wins = data.filter(t => (t.actual_pnl || 0) > 0).length;
+  const losses = data.filter(t => (t.actual_pnl || 0) <= 0).length;
+  const totalPnl = data.reduce((s, t) => s + (t.actual_pnl || 0), 0);
+  const avgPnl = totalPnl / total;
+  const best = data.reduce((b, t) => (t.actual_pnl || 0) > (b.actual_pnl || 0) ? t : b, data[0]);
+  const worst = data.reduce((w, t) => (t.actual_pnl || 0) < (w.actual_pnl || 0) ? t : w, data[0]);
+
+  // Stats by strategy type
+  const byStrat = {};
+  for (const t of data) {
+    const st = t.strategy_type || 'UNKNOWN';
+    if (!byStrat[st]) byStrat[st] = { total: 0, wins: 0, pnl: 0 };
+    byStrat[st].total++;
+    if ((t.actual_pnl || 0) > 0) byStrat[st].wins++;
+    byStrat[st].pnl += (t.actual_pnl || 0);
+  }
+
+  // Stats by Varsity tier (if stored)
+  const byTier = {};
+  for (const t of data) {
+    const tier = t.varsity_tier || 'Unknown';
+    if (!byTier[tier]) byTier[tier] = { total: 0, wins: 0, pnl: 0 };
+    byTier[tier].total++;
+    if ((t.actual_pnl || 0) > 0) byTier[tier].wins++;
+    byTier[tier].pnl += (t.actual_pnl || 0);
+  }
+
+  return {
+    total, wins, losses,
+    winRate: total > 0 ? +((wins / total) * 100).toFixed(1) : 0,
+    totalPnl: +totalPnl.toFixed(0),
+    avgPnl: +avgPnl.toFixed(0),
+    bestTrade: { pnl: best.actual_pnl || 0, type: best.strategy_type, index: best.index_key },
+    worstTrade: { pnl: worst.actual_pnl || 0, type: worst.strategy_type, index: worst.index_key },
+    byStrat, byTier
+  };
+}
+
+// ═══════════════════════════════════════════════════
+// EXPIRE — Mark expired OPEN trades
+// ═══════════════════════════════════════════════════
+
+async function dbExpireTrade(id, finalPnl) {
+  const db = getDB();
+  if (!db) return { ok: false };
+
+  const row = {
+    status: 'EXPIRED',
+    exit_date: todayIST(),
+    actual_pnl: finalPnl || 0,
+    exit_reason: 'EXPIRY',
+    recommendation: 'EXPIRED',
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await db.from('trade_log').update(row).eq('id', id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+console.log('[db.js] v5.0 Phase 3 — trade_log + journal ready');

@@ -118,7 +118,8 @@ async function upstoxAutoFill() {
       upstoxFetchHistorical('NSE_INDEX|Nifty 50', true),
       upstoxFetchHistorical('NSE_INDEX|Nifty Bank', false),
       upstoxFetchPositions(),
-      upstoxFetchMargins()
+      upstoxFetchMargins(),
+      upstoxFetchTradeBook()
     ];
     for (const exp of nfExps)  fetches.push(upstoxFetchFullChain('NSE_INDEX|Nifty 50', exp, 'NF'));
     for (const exp of bnfExps) fetches.push(upstoxFetchFullChain('NSE_INDEX|Nifty Bank', exp, 'BNF'));
@@ -419,6 +420,74 @@ async function upstoxCheckMargin(legs, lotSize) {
 }
 
 // ═══════════════════════════════════════════════════
+// TRADE BOOK — Actual fills for exit detection
+// ═══════════════════════════════════════════════════
+
+async function upstoxFetchTradeBook() {
+  const resp = await fetch(_bust(`${UPSTOX_API}/order/trades/get-trades-for-day`), { headers: _headers() });
+  const data = await resp.json();
+  if (data.status !== 'success') throw new Error('Trade book failed');
+  const trades = data.data || [];
+
+  // Store globally for exit matching in app.js
+  window._UPSTOX_TRADE_BOOK = trades;
+  console.log(`[upstox] Trade book: ${trades.length} fills today`);
+
+  // Trigger exit matching in app.js
+  if (typeof matchTradeBookExits === 'function') matchTradeBookExits(trades);
+}
+
+// ═══════════════════════════════════════════════════
+// LIGHTWEIGHT AUTO-FETCH — Positions only, no SIGNAL/COMMAND update
+// Runs every 5 mins during market hours (9:15-15:30 IST)
+// ═══════════════════════════════════════════════════
+
+let _autoFetchInterval = null;
+
+function isMarketHours() {
+  const now = new Date();
+  const ist = new Date(now.getTime() + (now.getTimezoneOffset() * 60000 + 19800000));
+  const h = ist.getHours(), m = ist.getMinutes();
+  const mins = h * 60 + m;
+  return mins >= 555 && mins <= 930; // 9:15 to 15:30
+}
+
+async function upstoxLightFetch() {
+  const token = upstoxGetToken();
+  if (!token || !isMarketHours()) return;
+
+  try {
+    // Only 3 calls: spots + positions + trade book
+    await upstoxFetchSpots();
+    await upstoxFetchPositions();
+    await upstoxFetchTradeBook();
+    console.log('[upstox] Light fetch complete (positions only)');
+  } catch(e) {
+    console.warn('[upstox] Light fetch error:', e.message);
+  }
+}
+
+function startAutoFetch() {
+  if (_autoFetchInterval) return; // Already running
+  _autoFetchInterval = setInterval(() => {
+    if (isMarketHours()) {
+      upstoxLightFetch();
+    } else {
+      stopAutoFetch();
+    }
+  }, 5 * 60 * 1000); // 5 minutes
+  console.log('[upstox] Auto-fetch started (5 min interval, market hours only)');
+}
+
+function stopAutoFetch() {
+  if (_autoFetchInterval) {
+    clearInterval(_autoFetchInterval);
+    _autoFetchInterval = null;
+    console.log('[upstox] Auto-fetch stopped');
+  }
+}
+
+// ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
 
@@ -426,12 +495,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const saveBtn = document.getElementById('btn-save-token');
   if (saveBtn) saveBtn.addEventListener('click', upstoxSaveAndFetch);
   const fetchBtn = document.getElementById('btn-fetch-upstox');
-  if (fetchBtn) fetchBtn.addEventListener('click', upstoxAutoFill);
+  if (fetchBtn) fetchBtn.addEventListener('click', () => {
+    upstoxAutoFill();
+    // Start auto-fetch after first manual fetch
+    if (isMarketHours()) startAutoFetch();
+  });
   // Auto-prompt token if expired or missing
   if (upstoxGetToken()) {
-    setTimeout(upstoxAutoFill, 500);
+    setTimeout(() => {
+      upstoxAutoFill();
+      if (isMarketHours()) startAutoFetch();
+    }, 500);
   } else {
     setTimeout(upstoxShowTokenModal, 300);
   }
-  console.log('[upstox.js] v5.0 — expiry discovery + full chain mode');
+  console.log('[upstox.js] v5.0 — Phase 3: auto-fetch + trade book');
 });

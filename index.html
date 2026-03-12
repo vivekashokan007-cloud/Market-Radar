@@ -28,6 +28,9 @@
   </div>
 </div>
 
+<!-- ALERT BANNER -->
+<div id="alert-banner" class="alert-banner" style="display:none"></div>
+
 <!-- TAB BAR -->
 <div class="tab-bar">
   <div class="tab active" id="t0">⚡ SIGNAL</div>
@@ -141,9 +144,15 @@
   <div id="positions-history"><div class="cmd-placeholder">No trade history yet</div></div>
 </div>
 
-<!-- PANEL 3: CLOSE -->
+<!-- PANEL 3: CLOSE / JOURNAL -->
 <div class="panel" id="p3">
-  <div class="section-title">Evening Close Data</div>
+  <div class="section-title">Trade Journal — Summary</div>
+  <div id="journal-stats"><div class="cmd-placeholder">No closed trades yet</div></div>
+
+  <div class="section-title" style="margin-top:16px">Recent Closed Trades</div>
+  <div id="journal-trades"><div class="cmd-placeholder">No trade history</div></div>
+
+  <div class="section-title" style="margin-top:20px">Evening Close Data</div>
   <div id="evening-section" class="evening-grid">
     <div class="input-group"><label>Evening FII ₹Cr</label><input type="number" id="ev_fii" step="1" placeholder="Final FII from NSDL"></div>
     <div class="input-group"><label>NF Close</label><input type="number" id="ev_nf_close" step="0.01" placeholder="Nifty 50 close"></div>
@@ -214,6 +223,22 @@
     });
   });
 })();
+</script>
+
+<!-- SERVICE WORKER + NOTIFICATIONS -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    console.log('[sw] Registered:', reg.scope);
+  }).catch(err => console.warn('[sw] Registration failed:', err));
+}
+// Request notification permission on first interaction
+document.addEventListener('click', function askNotif() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().then(p => console.log('[notif] Permission:', p));
+  }
+  document.removeEventListener('click', askNotif);
+}, { once: true });
 </script>
 
 </body>
