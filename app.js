@@ -1603,6 +1603,19 @@ async function renderPositionsTab() {
         </div>
       </div>`;
     }).join('');
+
+    // ── Sync banner with live P&L (same source as card) ──
+    const bannerAlerts = detected.map(pos => {
+      const pnl = computeLivePnL(pos);
+      const rec = pos.recommendation || 'HOLD';
+      const meta = ALERT_META[rec] || ALERT_META.HOLD;
+      const stratName = STRAT_LABELS[pos.strategy_type] || pos.strategy_type;
+      const target = pos.target_profit || 0;
+      const pct = target > 0 ? Math.round((pnl / target) * 100) : 0;
+      const pnlStr = (pnl >= 0 ? '+' : '') + '₹' + pnl.toLocaleString('en-IN');
+      return { title: `${meta.icon} ${meta.label} — ${stratName} ${pos.index_key}`, body: `P&L ${pnlStr} (${pct}% of target) · DTE ${daysTo(pos.expiry)}`, priority: meta.priority, rec };
+    });
+    renderAlertBanner(bannerAlerts);
   }
 
   // Render recent trade history from Supabase

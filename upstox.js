@@ -682,6 +682,20 @@ async function upstoxLightFetch() {
       }
     }
 
+    // Update auto-fetch timestamp on screen
+    const afEl = document.getElementById('upstox-positions');
+    if (afEl) {
+      const now = new Date();
+      const ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const existingHtml = afEl.innerHTML;
+      const tsHtml = `<div style="font-size:10px;color:var(--text-dim);text-align:right;margin-top:4px">Auto-fetch: ${ts}</div>`;
+      if (existingHtml.includes('Auto-fetch:')) {
+        afEl.innerHTML = existingHtml.replace(/<div[^>]*>Auto-fetch:[^<]*<\/div>/, tsHtml);
+      } else {
+        afEl.innerHTML += tsHtml;
+      }
+    }
+
     console.log('[upstox] Light fetch complete');
   } catch(e) {
     console.warn('[upstox] Light fetch error:', e.message);
