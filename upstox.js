@@ -615,6 +615,7 @@ async function upstoxLightFetch() {
               const spot = gv(isNF ? 'nf_price' : 'bn_price') || 0;
               let putOI = 0, callOI = 0;
               const sellStrikeOI = {};
+              const strikeLTPs = {}; // Strike-level LTPs for live P&L
 
               for (const item of data.data) {
                 const strike = item.strike_price || item.strikePrice || item.strike;
@@ -625,11 +626,13 @@ async function upstoxLightFetch() {
                   const md = callData.market_data || callData;
                   callOI += md.oi || md.open_interest || 0;
                   sellStrikeOI[`${strike}_CE`] = md.oi || md.open_interest || 0;
+                  strikeLTPs[`${strike}_CE`] = md.ltp || md.last_price || 0;
                 }
                 if (putData) {
                   const md = putData.market_data || putData;
                   putOI += md.oi || md.open_interest || 0;
                   sellStrikeOI[`${strike}_PE`] = md.oi || md.open_interest || 0;
+                  strikeLTPs[`${strike}_PE`] = md.ltp || md.last_price || 0;
                 }
               }
 
@@ -654,8 +657,8 @@ async function upstoxLightFetch() {
                 if (pain < minPain) { minPain = pain; mpStrike = c; }
               }
 
-              window._POSITION_CHAINS[key] = { pcr, maxPain: mpStrike, callOI, putOI, sellStrikeOI, spot };
-              console.log(`[upstox] Position chain: ${key} — PCR=${pcr}, MaxPain=${mpStrike}`);
+              window._POSITION_CHAINS[key] = { pcr, maxPain: mpStrike, callOI, putOI, sellStrikeOI, strikeLTPs, spot };
+              console.log(`[upstox] Position chain: ${key} — PCR=${pcr}, MaxPain=${mpStrike}, LTPs=${Object.keys(strikeLTPs).length} strikes`);
             }
           } catch(e) {
             console.warn(`[upstox] Position chain fetch failed for ${key}:`, e.message);

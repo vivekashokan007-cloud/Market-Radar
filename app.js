@@ -1382,14 +1382,66 @@ function checkThesis(trade) {
   };
 }
 
-function checkThesisAndNotify(openTrades) {
+async function checkThesisAndNotify(openTrades) {
   if (!openTrades || !openTrades.length) return;
 
   const alerts = [];
 
   for (const trade of openTrades) {
+    // ── Calculate live P&L from position chain LTPs ──
+    const key = `${trade.index_key}|${trade.expiry}`;
+    const posChain = (window._POSITION_CHAINS || {})[key];
+    let livePnl = trade.current_pnl || 0;
+    let pnlCalculated = false;
+
+    if (posChain && posChain.strikeLTPs) {
+      const lotSize = trade.index_key === 'NF' ? NF_LOT_SIZE : BNF_LOT;
+      const lots = trade.lots || 1;
+      let legPnlTotal = 0;
+
+      for (let i = 1; i <= 4; i++) {
+        const strike = trade[`leg${i}_strike`];
+        const type = trade[`leg${i}_type`];
+        const action = trade[`leg${i}_action`];
+        const entryLtp = trade[`leg${i}_entry_ltp`] || 0;
+        if (!strike || !type || !action) continue;
+
+        const ltpKey = `${strike}_${type}`;
+        const currentLtp = posChain.strikeLTPs[ltpKey] || 0;
+        if (currentLtp > 0) {
+          const mult = action === 'BUY' ? 1 : -1;
+          legPnlTotal += mult * (currentLtp - entryLtp);
+          pnlCalculated = true;
+        }
+      }
+
+      if (pnlCalculated) {
+        livePnl = +(legPnlTotal * lotSize * lots).toFixed(0);
+        // Update peak P&L
+        const prevPeak = trade.peak_pnl || 0;
+        const newPeak = Math.max(prevPeak, livePnl);
+        trade.current_pnl = livePnl;
+        trade.peak_pnl = newPeak;
+
+        // Update Supabase silently
+        if (typeof dbUpdateTrade === 'function') {
+          const liveSpot = posChain.spot || gv(trade.index_key === 'NF' ? 'nf_price' : 'bn_price');
+          const rec = computeRecommendation(trade, livePnl, liveSpot, trade.expiry);
+          trade.recommendation = rec;
+          dbUpdateTrade(trade.id, {
+            current_pnl: livePnl,
+            current_spot: liveSpot,
+            peak_pnl: +newPeak.toFixed(0),
+            recommendation: rec
+          });
+        }
+
+        console.log(`[thesis] Live P&L for ${trade.strategy_type} ${trade.index_key}: ₹${livePnl} (peak: ₹${trade.peak_pnl})`);
+      }
+    }
+
     const thesis = checkThesis(trade);
-    const pnl = trade.current_pnl || 0;
+    const pnl = livePnl;
     const target = trade.target_profit || 0;
     const stratName = STRAT_LABELS[trade.strategy_type] || trade.strategy_type;
     const pnlStr = (pnl >= 0 ? '+' : '') + '₹' + pnl.toLocaleString('en-IN');
@@ -1420,14 +1472,32 @@ function checkThesisAndNotify(openTrades) {
       });
     }
     // thesis.severity === 0 + P&L dropping → noise, HOLD (no alert)
+
+    // Always add a HOLD alert for routine notifications
+    if (!alerts.find(a => a.rec !== 'HOLD')) {
+      alerts.push({
+        title: `⚪ HOLD — ${stratName} ${trade.index_key}`,
+        body: `P&L ${pnlStr}${target > 0 ? ` (${Math.round((pnl / target) * 100)}% of target)` : ''} · DTE ${daysTo(trade.expiry)}`,
+        priority: 0, rec: 'HOLD'
+      });
+    }
   }
 
-  if (alerts.length > 0) {
-    alerts.sort((a, b) => b.priority - a.priority);
-    const top = alerts[0];
-    fireNotification(top.title, top.body, `mr-thesis-${top.rec}`);
-    renderAlertBanner(alerts);
+  // Update _DETECTED_POSITIONS with fresh P&L for POSITIONS tab
+  if (window._DETECTED_POSITIONS) {
+    for (const det of window._DETECTED_POSITIONS) {
+      const match = openTrades.find(t => t.id === det.id || (t.index_key === det.index_key && t.expiry === det.expiry));
+      if (match) {
+        det.current_pnl = match.current_pnl;
+        det.peak_pnl = match.peak_pnl;
+        det.recommendation = match.recommendation;
+      }
+    }
+    renderPositionsTab();
   }
+
+  // Fire notifications using smart timing
+  checkAndNotify(openTrades);
 }
 
 // ═══════════════════════════════════════════════════
