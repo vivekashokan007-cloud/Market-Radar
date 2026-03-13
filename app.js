@@ -861,15 +861,46 @@ async function detectAndLogPositions(rawPositions) {
     const sym = pos.tradingsymbol || pos.trading_symbol || '';
     const parsed = parseUpstoxSymbol(sym);
     if (!parsed) continue;
-    const key = `${parsed.indexKey}_${parsed.expiry}`;
+
+    // Use expiry from API if available, else from parsed symbol
+    let expiry = parsed.expiry;
+    if (pos.expiry || pos.expiry_date) {
+      const rawExp = pos.expiry || pos.expiry_date;
+      // Normalize: could be "2026-03-30" or "30-Mar-2026" etc
+      const d = new Date(rawExp);
+      if (!isNaN(d.getTime())) expiry = d.toISOString().slice(0, 10);
+    }
+    // Fallback: match against known chain expiries
+    if (expiry.includes('NaN') || !expiry) {
+      const chainExps = Object.keys(window._CHAINS[parsed.indexKey] || {}).sort();
+      if (chainExps.length > 0) expiry = chainExps[0]; // Use nearest
+    }
+
+    const key = `${parsed.indexKey}_${expiry}`;
     if (!groups[key]) groups[key] = [];
+
+    // Calculate live P&L from chain if available
+    let liveLtp = 0;
+    const chain = window._CHAINS[parsed.indexKey] && window._CHAINS[parsed.indexKey][expiry];
+    if (chain && chain.strikes && chain.strikes[parsed.strike]) {
+      const sd = chain.strikes[parsed.strike];
+      if (parsed.type === 'CE' && sd.CE) liveLtp = sd.CE.ltp || 0;
+      if (parsed.type === 'PE' && sd.PE) liveLtp = sd.PE.ltp || 0;
+    }
+    // Also check position chains from auto-fetch
+    const posChain = (window._POSITION_CHAINS || {})[key];
+
+    const entryPrice = pos.average_price || pos.buy_price || pos.sell_price || 0;
+    const legPnl = qty > 0 ? (liveLtp - entryPrice) * Math.abs(qty) : (entryPrice - liveLtp) * Math.abs(qty);
+
     groups[key].push({
       strike: parsed.strike,
       type: parsed.type,
       action: qty > 0 ? 'BUY' : 'SELL',
       qty: Math.abs(qty),
-      entry_ltp: pos.average_price || pos.buy_price || pos.sell_price || 0,
-      pnl: pos.pnl || 0,
+      entry_ltp: entryPrice,
+      pnl: liveLtp > 0 ? legPnl : 0,
+      current_ltp: liveLtp,
       symbol: sym
     });
   }
@@ -1183,14 +1214,19 @@ async function fireNotification(title, body, tag) {
   }
 }
 
+let _lastRoutineNotif = 0; // timestamp of last routine notification
+const ROUTINE_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
 function checkAndNotify(positions) {
   if (!positions || !positions.length) return;
 
   const alerts = [];
+  const now = Date.now();
+
   for (const pos of positions) {
     const rec = pos.recommendation || 'HOLD';
     const meta = ALERT_META[rec];
-    if (!meta || meta.priority < 3) continue; // Only BOOK_PROFIT, EXIT_EARLY, EXIT_NOW
+    if (!meta) continue;
 
     const stratName = STRAT_LABELS[pos.strategy_type] || pos.strategy_type;
     const pnl = pos.current_pnl || 0;
@@ -1206,14 +1242,23 @@ function checkAndNotify(positions) {
     });
   }
 
-  // Fire notification for highest priority alert
-  if (alerts.length > 0) {
-    alerts.sort((a, b) => b.priority - a.priority);
-    const top = alerts[0];
-    fireNotification(top.title, top.body, `mr-${top.rec}`);
+  if (alerts.length === 0) return;
+
+  alerts.sort((a, b) => b.priority - a.priority);
+  const top = alerts[0];
+
+  // Urgent alerts (EXIT_NOW, EXIT_EARLY, BOOK_PROFIT) → fire IMMEDIATELY
+  if (top.priority >= 3) {
+    fireNotification(top.title, top.body, `mr-urgent-${top.rec}`);
+  }
+  // Routine status (HOLD, TRAIL) → fire every 30 minutes
+  else if (now - _lastRoutineNotif >= ROUTINE_INTERVAL) {
+    const routineBody = alerts.map(a => `${a.title}: ${a.body}`).join('\n');
+    fireNotification('⚡ Market Radar — Position Update', routineBody, 'mr-routine');
+    _lastRoutineNotif = now;
   }
 
-  // Render banner on all tabs
+  // Banner always updates on every check
   renderAlertBanner(alerts);
 }
 

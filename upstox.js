@@ -522,7 +522,7 @@ function reconstructPositionsFromTrades(trades) {
   for (const t of trades) {
     const sym = t.tradingsymbol || t.trading_symbol || '';
     if (!sym) continue;
-    if (!bySymbol[sym]) bySymbol[sym] = { buys: [], sells: [] };
+    if (!bySymbol[sym]) bySymbol[sym] = { buys: [], sells: [], raw: t };
     const qty = Math.abs(t.quantity || 0);
     const price = t.price || t.average_price || 0;
     if (t.transaction_type === 'BUY') {
@@ -534,7 +534,7 @@ function reconstructPositionsFromTrades(trades) {
 
   const positions = [];
   for (const sym in bySymbol) {
-    const { buys, sells } = bySymbol[sym];
+    const { buys, sells, raw } = bySymbol[sym];
     const totalBuyQty = buys.reduce((s, b) => s + b.qty, 0);
     const totalSellQty = sells.reduce((s, b) => s + b.qty, 0);
     const netQty = totalBuyQty - totalSellQty;
@@ -553,7 +553,11 @@ function reconstructPositionsFromTrades(trades) {
       average_price: +avgPrice.toFixed(2),
       buy_price: netQty > 0 ? +avgPrice.toFixed(2) : 0,
       sell_price: netQty < 0 ? +avgPrice.toFixed(2) : 0,
-      pnl: 0 // Can't calculate without current LTP
+      pnl: 0,
+      // Pass through expiry + instrument_key from raw trade data
+      expiry: raw.expiry || raw.expiry_date || null,
+      instrument_key: raw.instrument_key || raw.instrument_token || null,
+      exchange: raw.exchange || 'NSE_FO'
     });
   }
 
