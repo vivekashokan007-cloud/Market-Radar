@@ -760,37 +760,55 @@ function showDebug() {
 // ═══════════════════════════════════════════════════
 
 function parseUpstoxSymbol(sym) {
-  // Parse tradingsymbol like "NIFTY2630656300CE" or "BANKNIFTY2630355200PE"
+  // Parse tradingsymbol like "NIFTY2630656300CE" or "BANKNIFTY26MAR54200PE"
   if (!sym) return null;
   const s = sym.toUpperCase();
   let indexKey, rest;
   if (s.startsWith('BANKNIFTY')) { indexKey = 'BNF'; rest = s.slice(9); }
   else if (s.startsWith('NIFTY')) { indexKey = 'NF'; rest = s.slice(5); }
   else return null;
-  // rest = "2630656300CE" → year(2)+month(1-2)+day(2)+strike+type
   const type = rest.slice(-2); // CE or PE
   if (type !== 'CE' && type !== 'PE') return null;
   const numPart = rest.slice(0, -2);
-  // Extract expiry: first 5-7 chars are YYMDD or YYMMDD
-  // Extract strike: remaining digits
-  // Upstox format: YYMDD (e.g., 26306 = 2026-03-06)
-  let expStr, strikeStr;
-  if (numPart.length >= 7) {
-    expStr = numPart.slice(0, 5); strikeStr = numPart.slice(5);
-  } else {
-    return null;
+
+  // Month name map
+  const MONTHS = {JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+
+  // Try format: YY + MonthName + Strike (e.g., "26MAR54200")
+  const monthMatch = numPart.match(/^(\d{2})([A-Z]{3})(\d+)$/);
+  if (monthMatch) {
+    const yy = parseInt(monthMatch[1]);
+    const mm = MONTHS[monthMatch[2]];
+    const strike = parseFloat(monthMatch[3]);
+    if (!mm || isNaN(strike)) return null;
+    // For month-name format, day = last Thursday (expiry day)
+    // Calculate last Thursday of the month for BNF, or find nearest Thursday for NF
+    const year = 2000 + yy;
+    const lastDay = new Date(year, mm, 0); // Last day of month
+    let dd = lastDay.getDate();
+    while (lastDay.getDay() !== 4) { lastDay.setDate(lastDay.getDate() - 1); dd = lastDay.getDate(); }
+    const expiry = `${year}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+    return { indexKey, expiry, strike, type };
   }
-  const strike = parseFloat(strikeStr);
-  if (isNaN(strike)) return null;
-  // Parse expiry: YY M DD or YY MM DD
-  const yy = parseInt(expStr.slice(0, 2));
-  const remaining = expStr.slice(2);
-  let mm, dd;
-  if (remaining.length === 3) { mm = parseInt(remaining.slice(0, 1)); dd = parseInt(remaining.slice(1)); }
-  else if (remaining.length === 4) { mm = parseInt(remaining.slice(0, 2)); dd = parseInt(remaining.slice(2)); }
-  else return null;
-  const expiry = `20${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
-  return { indexKey, expiry, strike, type };
+
+  // Try format: YYMDD or YYMMDD + Strike (e.g., "2633054200")
+  if (numPart.length >= 7) {
+    const expStr = numPart.slice(0, 5);
+    const strikeStr = numPart.slice(5);
+    const strike = parseFloat(strikeStr);
+    if (isNaN(strike)) return null;
+    const yy = parseInt(expStr.slice(0, 2));
+    const remaining = expStr.slice(2);
+    let mm, dd;
+    if (remaining.length === 3) { mm = parseInt(remaining.slice(0, 1)); dd = parseInt(remaining.slice(1)); }
+    else if (remaining.length === 4) { mm = parseInt(remaining.slice(0, 2)); dd = parseInt(remaining.slice(2)); }
+    else return null;
+    if (isNaN(mm) || isNaN(dd)) return null;
+    const expiry = `20${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+    return { indexKey, expiry, strike, type };
+  }
+
+  return null;
 }
 
 function detectStrategy(legs) {

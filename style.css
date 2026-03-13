@@ -340,11 +340,11 @@ html, body {
 .alert-trail { background: #3a3a0a; border-color: #ffdd00; color: #f0d050; }
 
 /* ── Smart Alert Badges ── */
-.rec-exit { background: #5a1a1a; color: #ff6b6b; }
-.rec-early { background: #5a3a0a; color: #ffaa44; }
-.rec-book { background: #1a4a1a; color: #6bff6b; }
-.rec-trail { background: #4a4a0a; color: #f0d050; }
-.rec-hold { background: #3d352c; color: var(--text-dim); }
+.rec-exit { background: #5a1a1a; color: #ff6b6b; font-weight: 800; }
+.rec-early { background: #5a3a0a; color: #ffaa44; font-weight: 800; }
+.rec-book { background: #1a4a1a; color: #6bff6b; font-weight: 800; }
+.rec-trail { background: #4a4a0a; color: #f0d050; font-weight: 800; }
+.rec-hold { background: #1a3a5a; color: #6bc5ff; font-weight: 800; }
 
 /* ── Journal (Phase 3) ── */
 .journal-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
