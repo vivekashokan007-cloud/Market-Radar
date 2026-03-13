@@ -1262,7 +1262,8 @@ function checkAndNotify(positions) {
     if (!meta) continue;
 
     const stratName = STRAT_LABELS[pos.strategy_type] || pos.strategy_type;
-    const pnl = pos.current_pnl || 0;
+    // Use shared live P&L calculator
+    const pnl = computeLivePnL(pos);
     const pnlStr = (pnl >= 0 ? '+' : '') + '₹' + pnl.toLocaleString('en-IN');
     const target = pos.target_profit || 0;
     const pct = target > 0 ? Math.round((pnl / target) * 100) : 0;
@@ -1421,56 +1422,25 @@ async function checkThesisAndNotify(openTrades) {
   const alerts = [];
 
   for (const trade of openTrades) {
-    // ── Calculate live P&L from position chain LTPs ──
-    const key = `${trade.index_key}|${trade.expiry}`;
-    const posChain = (window._POSITION_CHAINS || {})[key];
-    let livePnl = trade.current_pnl || 0;
-    let pnlCalculated = false;
+    // ── Calculate live P&L using shared function ──
+    const livePnl = computeLivePnL(trade);
+    const prevPeak = trade.peak_pnl || 0;
+    const newPeak = Math.max(prevPeak, livePnl);
+    trade.current_pnl = livePnl;
+    trade.peak_pnl = newPeak;
 
-    if (posChain && posChain.strikeLTPs) {
-      const lotSize = trade.index_key === 'NF' ? NF_LOT_SIZE : BNF_LOT;
-      const lots = trade.lots || 1;
-      let legPnlTotal = 0;
-
-      for (let i = 1; i <= 4; i++) {
-        const strike = trade[`leg${i}_strike`];
-        const type = trade[`leg${i}_type`];
-        const action = trade[`leg${i}_action`];
-        const entryLtp = trade[`leg${i}_entry_ltp`] || 0;
-        if (!strike || !type || !action) continue;
-
-        const ltpKey = `${strike}_${type}`;
-        const currentLtp = posChain.strikeLTPs[ltpKey] || 0;
-        if (currentLtp > 0) {
-          const mult = action === 'BUY' ? 1 : -1;
-          legPnlTotal += mult * (currentLtp - entryLtp);
-          pnlCalculated = true;
-        }
-      }
-
-      if (pnlCalculated) {
-        livePnl = +(legPnlTotal * lotSize * lots).toFixed(0);
-        // Update peak P&L
-        const prevPeak = trade.peak_pnl || 0;
-        const newPeak = Math.max(prevPeak, livePnl);
-        trade.current_pnl = livePnl;
-        trade.peak_pnl = newPeak;
-
-        // Update Supabase silently
-        if (typeof dbUpdateTrade === 'function') {
-          const liveSpot = posChain.spot || gv(trade.index_key === 'NF' ? 'nf_price' : 'bn_price');
-          const rec = computeRecommendation(trade, livePnl, liveSpot, trade.expiry);
-          trade.recommendation = rec;
-          dbUpdateTrade(trade.id, {
-            current_pnl: livePnl,
-            current_spot: liveSpot,
-            peak_pnl: +newPeak.toFixed(0),
-            recommendation: rec
-          });
-        }
-
-        console.log(`[thesis] Live P&L for ${trade.strategy_type} ${trade.index_key}: ₹${livePnl} (peak: ₹${trade.peak_pnl})`);
-      }
+    // Update Supabase with fresh P&L
+    if (livePnl !== 0 && typeof dbUpdateTrade === 'function') {
+      const liveSpot = (window._POSITION_CHAINS || {})[`${trade.index_key}|${trade.expiry}`]?.spot || gv(trade.index_key === 'NF' ? 'nf_price' : 'bn_price');
+      const rec = computeRecommendation(trade, livePnl, liveSpot, trade.expiry);
+      trade.recommendation = rec;
+      dbUpdateTrade(trade.id, {
+        current_pnl: livePnl,
+        current_spot: liveSpot,
+        peak_pnl: +newPeak.toFixed(0),
+        recommendation: rec
+      });
+      console.log(`[thesis] Live P&L: ${trade.strategy_type} ${trade.index_key} ₹${livePnl} (peak: ₹${newPeak})`);
     }
 
     const thesis = checkThesis(trade);
@@ -1534,6 +1504,49 @@ async function checkThesisAndNotify(openTrades) {
 }
 
 // ═══════════════════════════════════════════════════
+// LIVE P&L CALCULATOR — shared by card, banner, notifications
+// ═══════════════════════════════════════════════════
+
+function computeLivePnL(trade, legs) {
+  if (!legs) {
+    legs = [];
+    for (let i = 1; i <= 4; i++) {
+      if (trade[`leg${i}_strike`]) {
+        legs.push({ strike: trade[`leg${i}_strike`], type: trade[`leg${i}_type`], action: trade[`leg${i}_action`], entry_ltp: trade[`leg${i}_entry_ltp`] || 0 });
+      }
+    }
+  }
+  if (legs.length === 0) return trade.current_pnl || 0;
+
+  const fullChain = window._CHAINS && window._CHAINS[trade.index_key] && window._CHAINS[trade.index_key][trade.expiry];
+  const posChainData = (window._POSITION_CHAINS || {})[`${trade.index_key}|${trade.expiry}`];
+  const lotSize = trade.index_key === 'NF' ? NF_LOT_SIZE : BNF_LOT;
+  const lots = trade.lots || 1;
+
+  let calcPnl = 0, foundAll = true;
+  for (const leg of legs) {
+    let currentLtp = 0;
+    // Try full chain
+    if (fullChain && fullChain.strikes && fullChain.strikes[leg.strike]) {
+      const sd = fullChain.strikes[leg.strike];
+      if (leg.type === 'PE' && sd.PE) currentLtp = sd.PE.ltp || 0;
+      if (leg.type === 'CE' && sd.CE) currentLtp = sd.CE.ltp || 0;
+    }
+    // Try position chain
+    if (currentLtp === 0 && posChainData && posChainData.strikeLTPs) {
+      currentLtp = posChainData.strikeLTPs[`${leg.strike}_${leg.type}`] || 0;
+    }
+    if (currentLtp > 0 && leg.entry_ltp > 0) {
+      const mult = leg.action === 'BUY' ? 1 : -1;
+      calcPnl += mult * (currentLtp - leg.entry_ltp);
+    } else {
+      foundAll = false;
+    }
+  }
+  return foundAll ? +(calcPnl * lotSize * lots).toFixed(0) : (trade.current_pnl || 0);
+}
+
+// ═══════════════════════════════════════════════════
 // POSITIONS TAB RENDER
 // ═══════════════════════════════════════════════════
 
@@ -1550,56 +1563,33 @@ async function renderPositionsTab() {
     openEl.innerHTML = detected.map(pos => {
       const meta = ALERT_META[pos.recommendation] || ALERT_META.HOLD;
       let livePnl = pos.current_pnl || 0;
-      const legStr = (pos.legs || []).map(l => `${l.action} ${l.strike} ${l.type}`).join(' | ');
 
-      // ── Compute live P&L directly from chain data ──
-      const fullChain = window._CHAINS && window._CHAINS[pos.index_key] && window._CHAINS[pos.index_key][pos.expiry];
-      const posChainData = (window._POSITION_CHAINS || {})[`${pos.index_key}|${pos.expiry}`];
-      const lotSize = pos.index_key === 'NF' ? NF_LOT_SIZE : BNF_LOT;
-      const lots = pos.lots || 1;
-
-      if (pos.legs && pos.legs.length > 0) {
-        let calcPnl = 0;
-        let foundAll = true;
-        for (const leg of pos.legs) {
-          let currentLtp = 0;
-          // Try full chain first
-          if (fullChain && fullChain.strikes && fullChain.strikes[leg.strike]) {
-            const sd = fullChain.strikes[leg.strike];
-            if (leg.type === 'PE' && sd.PE) currentLtp = sd.PE.ltp || 0;
-            if (leg.type === 'CE' && sd.CE) currentLtp = sd.CE.ltp || 0;
+      // Build legs array from either format
+      let legs = pos.legs || [];
+      if (legs.length === 0) {
+        // Reconstruct from flat Supabase fields
+        for (let i = 1; i <= 4; i++) {
+          if (pos[`leg${i}_strike`]) {
+            legs.push({
+              strike: pos[`leg${i}_strike`],
+              type: pos[`leg${i}_type`],
+              action: pos[`leg${i}_action`],
+              entry_ltp: pos[`leg${i}_entry_ltp`] || 0
+            });
           }
-          // Try position chain
-          if (currentLtp === 0 && posChainData && posChainData.strikeLTPs) {
-            currentLtp = posChainData.strikeLTPs[`${leg.strike}_${leg.type}`] || 0;
-          }
-          if (currentLtp > 0 && leg.entry_ltp > 0) {
-            const mult = leg.action === 'BUY' ? 1 : -1;
-            calcPnl += mult * (currentLtp - leg.entry_ltp);
-          } else {
-            foundAll = false;
-          }
-        }
-        if (foundAll) {
-          livePnl = +(calcPnl * lotSize * lots).toFixed(0);
         }
       }
+
+      const legStr = legs.map(l => `${l.action} ${l.strike} ${l.type}`).join(' | ');
+
+      // ── Compute live P&L from ANY available chain source ──
+      livePnl = computeLivePnL(pos, legs);
 
       const pnlClass = livePnl >= 0 ? 'profit' : 'loss';
       const peakPnl = Math.max(pos.peak_pnl || 0, livePnl);
       const peakStr = peakPnl > 0 ? ` · Peak: ₹${peakPnl.toLocaleString('en-IN')}` : '';
-      // P&L debug: show chain lookup status
-      const debugKey = `${pos.index_key}_${pos.expiry}`;
-      const dbgChain = window._CHAINS && window._CHAINS[pos.index_key] && window._CHAINS[pos.index_key][pos.expiry];
-      const dbgPosChain = (window._POSITION_CHAINS || {})[`${pos.index_key}|${pos.expiry}`];
-      let pnlDebug = `Chain:${dbgChain?'✅':'❌'} PosChain:${dbgPosChain?'✅':'❌'}`;
-      if (pos.legs) {
-        for (const l of pos.legs) {
-          const cLtp = dbgChain && dbgChain.strikes && dbgChain.strikes[l.strike] && dbgChain.strikes[l.strike][l.type] ? dbgChain.strikes[l.strike][l.type].ltp : '?';
-          const pLtp = dbgPosChain && dbgPosChain.strikeLTPs ? (dbgPosChain.strikeLTPs[`${l.strike}_${l.type}`] || '?') : '?';
-          pnlDebug += ` | ${l.strike}${l.type}: chain=${cLtp} pos=${pLtp} entry=${l.entry_ltp||'?'}`;
-        }
-      }
+      const target = pos.target_profit || 0;
+      const pct = target > 0 ? Math.round((livePnl / target) * 100) : 0;
       return `<div class="pos-card">
         <div class="pos-card-header">
           <span class="pos-strat-name">${STRAT_LABELS[pos.strategy_type] || pos.strategy_type}</span>
@@ -1608,10 +1598,9 @@ async function renderPositionsTab() {
         <div class="pos-card-index">${pos.index_key} · ${pos.expiry} · DTE ${daysTo(pos.expiry)}</div>
         <div class="pos-card-legs">${legStr}</div>
         <div class="pos-card-pnl">
-          <span>P&L: <span class="${pnlClass}">₹${livePnl.toLocaleString('en-IN')}</span>${peakStr}</span>
+          <span>P&L: <span class="${pnlClass}">₹${livePnl.toLocaleString('en-IN')}</span> (${pct}%)${peakStr}</span>
           <span>Target: ₹${(pos.target_profit||0).toLocaleString('en-IN')} | SL: ₹${(pos.stop_loss||0).toLocaleString('en-IN')}</span>
         </div>
-        <div style="font-size:9px;color:var(--text-dim);margin-top:4px;word-break:break-all">${pnlDebug}</div>
       </div>`;
     }).join('');
   }

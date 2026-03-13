@@ -677,6 +677,8 @@ async function upstoxLightFetch() {
 
         // Trigger thesis check in app.js
         if (typeof checkThesisAndNotify === 'function') checkThesisAndNotify(openTrades);
+        // Force re-render with fresh chain data
+        if (typeof renderPositionsTab === 'function') renderPositionsTab();
       }
     }
 
