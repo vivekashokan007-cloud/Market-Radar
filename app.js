@@ -565,7 +565,7 @@ function renderStrategyCard(setup, index) {
     const price = l.action === 'SELL' ? (l.data.bid || l.data.ltp) : (l.data.ask || l.data.ltp);
     return `${l.action} ${l.strike} ${l.type} (${moneyLabel(l.strike, setup.spot, l.type)}) @₹${price.toFixed(0)}`;
   }).join(' | ');
-  const tierColor = setup.varsityMult >= 0.95 ? '#5cb85c' : setup.varsityMult >= 0.60 ? '#d4a853' : '#8a7d6f';
+  const tierColor = setup.varsityMult >= 0.95 ? '#22c55e' : setup.varsityMult >= 0.60 ? '#8b5cf6' : '#8a8a9a';
   return `<div class="strat-card" data-idx="${index}">
     <div class="sc-rank">#${index+1}</div>
     <div class="sc-header"><div class="sc-name">${setup.stratLabel} <span style="font-size:10px;color:${tierColor};margin-left:6px">${setup.varsityTier || ''}</span></div><div class="sc-index">${setup.indexKey} · ${setup.expiry} · DTE ${setup.dte} (${setup.tradingDte}T)</div></div>
@@ -664,48 +664,48 @@ function drawPayoffChart(setup) {
   const ty = y => pad.top + plotH - ((y-yMin)/(yMax-yMin))*plotH;
   ctx.clearRect(0, 0, CW, CH);
   // Grid
-  ctx.strokeStyle='#3d352c'; ctx.lineWidth=0.5; ctx.fillStyle='#8a7d6f'; ctx.font='11px Courier New';
+  ctx.strokeStyle='#2e2e42'; ctx.lineWidth=0.5; ctx.fillStyle='#8a8a9a'; ctx.font='11px system-ui, sans-serif';
   ctx.textAlign='right';
   for (let i=0;i<=5;i++) { const yV=yMin+(yMax-yMin)*i/5, py=ty(yV); ctx.beginPath();ctx.moveTo(pad.left,py);ctx.lineTo(CW-pad.right,py);ctx.stroke(); ctx.fillText(Math.abs(yV)>=1000?(yV/1000).toFixed(1)+'K':yV.toFixed(0),pad.left-5,py+4); }
   ctx.textAlign='center';
   for (let i=0;i<=5;i++) { const xV=xMin+(xMax-xMin)*i/5, px=tx(xV); ctx.beginPath();ctx.moveTo(px,pad.top);ctx.lineTo(px,CH-pad.bottom);ctx.stroke(); ctx.fillText(xV.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,','),px,CH-pad.bottom+15); }
   // Zero line
-  if (yMin<0 && yMax>0) { ctx.strokeStyle='#5a5040';ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(pad.left,ty(0));ctx.lineTo(CW-pad.right,ty(0));ctx.stroke();ctx.setLineDash([]); }
+  if (yMin<0 && yMax>0) { ctx.strokeStyle='#3a3a50';ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(pad.left,ty(0));ctx.lineTo(CW-pad.right,ty(0));ctx.stroke();ctx.setLineDash([]); }
   // Target/SL horizontal lines
   if (setup.targetProfit && yMin < setup.targetProfit && yMax > setup.targetProfit) {
-    ctx.strokeStyle='#5cb85c'; ctx.lineWidth=1; ctx.setLineDash([6,3]);
+    ctx.strokeStyle='#22c55e'; ctx.lineWidth=1; ctx.setLineDash([6,3]);
     ctx.beginPath(); ctx.moveTo(pad.left,ty(setup.targetProfit)); ctx.lineTo(CW-pad.right,ty(setup.targetProfit)); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle='#5cb85c'; ctx.font='9px Courier New'; ctx.textAlign='right';
+    ctx.fillStyle='#22c55e'; ctx.font='9px system-ui, sans-serif'; ctx.textAlign='right';
     ctx.fillText('TARGET',CW-pad.right-2,ty(setup.targetProfit)-3);
   }
   if (setup.stopLoss && yMin < -setup.stopLoss && yMax > -setup.stopLoss) {
-    ctx.strokeStyle='#d9534f'; ctx.lineWidth=1; ctx.setLineDash([6,3]);
+    ctx.strokeStyle='#ef4444'; ctx.lineWidth=1; ctx.setLineDash([6,3]);
     ctx.beginPath(); ctx.moveTo(pad.left,ty(-setup.stopLoss)); ctx.lineTo(CW-pad.right,ty(-setup.stopLoss)); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle='#d9534f'; ctx.font='9px Courier New'; ctx.textAlign='right';
+    ctx.fillStyle='#ef4444'; ctx.font='9px system-ui, sans-serif'; ctx.textAlign='right';
     ctx.fillText('STOP LOSS',CW-pad.right-2,ty(-setup.stopLoss)-3);
   }
   // Loss region
-  ctx.beginPath(); ctx.moveTo(tx(points[0].x),ty(0)); for (const p of points) ctx.lineTo(tx(p.x),ty(Math.min(p.y,0))); ctx.lineTo(tx(points[points.length-1].x),ty(0)); ctx.closePath(); ctx.fillStyle='rgba(217,83,79,0.20)'; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(tx(points[0].x),ty(0)); for (const p of points) ctx.lineTo(tx(p.x),ty(Math.min(p.y,0))); ctx.lineTo(tx(points[points.length-1].x),ty(0)); ctx.closePath(); ctx.fillStyle='rgba(239,68,68,0.18)'; ctx.fill();
   // Profit region
-  ctx.beginPath(); ctx.moveTo(tx(points[0].x),ty(0)); for (const p of points) ctx.lineTo(tx(p.x),ty(Math.max(p.y,0))); ctx.lineTo(tx(points[points.length-1].x),ty(0)); ctx.closePath(); ctx.fillStyle='rgba(92,184,92,0.20)'; ctx.fill();
-  // Payoff line
-  ctx.strokeStyle='#d4a853'; ctx.lineWidth=2; ctx.beginPath(); for (let i=0;i<points.length;i++) { if(i===0) ctx.moveTo(tx(points[i].x),ty(points[i].y)); else ctx.lineTo(tx(points[i].x),ty(points[i].y)); } ctx.stroke();
-  // Current P&L curve
+  ctx.beginPath(); ctx.moveTo(tx(points[0].x),ty(0)); for (const p of points) ctx.lineTo(tx(p.x),ty(Math.max(p.y,0))); ctx.lineTo(tx(points[points.length-1].x),ty(0)); ctx.closePath(); ctx.fillStyle='rgba(34,197,94,0.18)'; ctx.fill();
+  // Payoff line (at expiry — orange like Upstox)
+  ctx.strokeStyle='#ef6c00'; ctx.lineWidth=2; ctx.beginPath(); for (let i=0;i<points.length;i++) { if(i===0) ctx.moveTo(tx(points[i].x),ty(points[i].y)); else ctx.lineTo(tx(points[i].x),ty(points[i].y)); } ctx.stroke();
+  // Current P&L curve (green like Upstox)
   if (setup.dte > 1) {
     const lV = window._LIVE_VIX||14, T=setup.dte/365, r=0.065, cp=[];
     for (let s=xMin;s<=xMax;s+=step) { let pv=0; for (const leg of setup.legs) { const gM=leg.action==='SELL'?-1:1; const iv=(leg.data.iv||lV)/100; pv+=gM*(leg.type==='CE'?bsCall(s,leg.strike,r,iv,T):bsPut(s,leg.strike,r,iv,T)); } cp.push({x:s,y:(setup.netPremium+pv)*setup.lotSize*setup.lots}); }
-    ctx.strokeStyle='#f0ad4e';ctx.lineWidth=1.5;ctx.setLineDash([6,3]);ctx.beginPath();for(let i=0;i<cp.length;i++){const py=ty(Math.max(yMin,Math.min(yMax,cp[i].y)));if(i===0)ctx.moveTo(tx(cp[i].x),py);else ctx.lineTo(tx(cp[i].x),py);}ctx.stroke();ctx.setLineDash([]);
+    ctx.strokeStyle='#22c55e';ctx.lineWidth=1.5;ctx.setLineDash([6,3]);ctx.beginPath();for(let i=0;i<cp.length;i++){const py=ty(Math.max(yMin,Math.min(yMax,cp[i].y)));if(i===0)ctx.moveTo(tx(cp[i].x),py);else ctx.lineTo(tx(cp[i].x),py);}ctx.stroke();ctx.setLineDash([]);
   }
-  // Spot marker
-  ctx.strokeStyle='#5bc0de';ctx.lineWidth=1.5;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(tx(spot),pad.top);ctx.lineTo(tx(spot),CH-pad.bottom);ctx.stroke();ctx.setLineDash([]);
+  // Spot marker (grey like Upstox)
+  ctx.strokeStyle='#8a8a9a';ctx.lineWidth=1.5;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(tx(spot),pad.top);ctx.lineTo(tx(spot),CH-pad.bottom);ctx.stroke();ctx.setLineDash([]);
   const sp=points.reduce((b,p)=>Math.abs(p.x-spot)<Math.abs(b.x-spot)?p:b,points[0]);
-  ctx.fillStyle='#5bc0de';ctx.beginPath();ctx.arc(tx(spot),ty(sp.y),5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#8a8a9a';ctx.beginPath();ctx.arc(tx(spot),ty(sp.y),5,0,Math.PI*2);ctx.fill();
   // Breakeven markers
-  for (const be of setup.breakevens) { const bx=tx(be); if(bx>pad.left&&bx<CW-pad.right){ctx.fillStyle='#f0ad4e';ctx.beginPath();ctx.moveTo(bx,CH-pad.bottom-5);ctx.lineTo(bx-4,CH-pad.bottom+3);ctx.lineTo(bx+4,CH-pad.bottom+3);ctx.closePath();ctx.fill();ctx.fillStyle='#8a7d6f';ctx.font='10px Courier New';ctx.textAlign='center';ctx.fillText(be.toString(),bx,CH-pad.bottom+28);} }
+  for (const be of setup.breakevens) { const bx=tx(be); if(bx>pad.left&&bx<CW-pad.right){ctx.fillStyle='#f59e0b';ctx.beginPath();ctx.moveTo(bx,CH-pad.bottom-5);ctx.lineTo(bx-4,CH-pad.bottom+3);ctx.lineTo(bx+4,CH-pad.bottom+3);ctx.closePath();ctx.fill();ctx.fillStyle='#8a8a9a';ctx.font='10px system-ui, sans-serif';ctx.textAlign='center';ctx.fillText(be.toString(),bx,CH-pad.bottom+28);} }
   // Legend
-  ctx.font='10px Courier New';ctx.textAlign='left';ctx.fillStyle='#d4a853';ctx.fillText('— At expiry',pad.left+5,pad.top+12);
-  if(setup.dte>1){ctx.fillStyle='#f0ad4e';ctx.fillText('--- Current',pad.left+100,pad.top+12);}
-  ctx.fillStyle='#5bc0de';ctx.fillText('● Spot',pad.left+190,pad.top+12);
+  ctx.font='10px system-ui, sans-serif';ctx.textAlign='left';ctx.fillStyle='#ef6c00';ctx.fillText('— At expiry',pad.left+5,pad.top+12);
+  if(setup.dte>1){ctx.fillStyle='#22c55e';ctx.fillText('--- Current',pad.left+100,pad.top+12);}
+  ctx.fillStyle='#8a8a9a';ctx.fillText('● Spot',pad.left+190,pad.top+12);
 }
 
 // ═══════════════════════════════════════════════════

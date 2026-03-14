@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#d4a853">
+  <meta name="theme-color" content="#8b5cf6">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Market Radar v5.0</title>
@@ -207,7 +207,7 @@
     if (icon) icon.textContent = theme === 'dark' ? '🌙' : '☀️';
     if (label) label.textContent = theme === 'dark' ? 'Dark' : 'Light';
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = theme === 'dark' ? '#d4a853' : '#b8862d';
+    if (meta) meta.content = theme === 'dark' ? '#8b5cf6' : '#7c3aed';
   }
   document.addEventListener('DOMContentLoaded', () => {
     updateUI(saved);
